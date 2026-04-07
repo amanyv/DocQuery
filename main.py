@@ -12,7 +12,10 @@ DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 DB_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
 
 print("Loading embedding model...")
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+    cache_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_cache")
+)
 print("  Embedding model ready")
 
 client = OpenAI(

@@ -24,10 +24,13 @@ def index():
 
 @app.route("/api/status")
 def status():
-    return jsonify({"ready": "True", "message": "RAG pipeline ready."})
+    ready = rag is not None
+    return jsonify({"ready": ready, "message": "RAG pipeline ready." if ready else "Server still loading, please wait..."})
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
+    if rag is None:
+        return jsonify({"error": "Server is still loading, please wait 30 seconds and try again."}), 503
     if "files" not in request.files:
         return jsonify({"error": "No files provided."}), 400
 
@@ -73,6 +76,8 @@ def ask():
     if not question:
         return jsonify({"error": "Question is required."}), 400
     
+    if rag is None:
+        return jsonify({"error": "Server is still loading, please wait and try again."}), 503
     if rag.retriever is None:
         return jsonify({"error": "No PDFs uploaded yet. Please upload a PDF first."}), 400
 

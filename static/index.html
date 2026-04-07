@@ -1,289 +1,354 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>DocQuery</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; }
+  <head>
+    <title>DocQuery</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
 
-    .container { display: flex; height: 100vh; width: 100%; }
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, sans-serif;
+        background: linear-gradient(135deg, #e0e7ff, #f8fafc);
+      }
 
-    .sidebar {
-      width: 260px;
-      background: #1e1e2e;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      padding: 16px;
-      gap: 12px;
-    }
+      .container {
+        display: flex;
+        height: 100vh;
+      }
 
-    .sidebar h3 { margin: 0 0 8px; font-size: 15px; color: #aaa; }
+      .sidebar {
+        width: 270px;
+        background: rgba(30, 30, 46, 0.95);
+        backdrop-filter: blur(12px);
+        color: white;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+      }
 
-    .upload-btn {
-      display: block;
-      width: 100%;
-      padding: 10px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      text-align: center;
-    }
+      .sidebar h3 {
+        margin: 0;
+        font-size: 14px;
+        color: #9ca3af;
+      }
 
-    .upload-btn:hover { background: #0056b3; }
+      .upload-btn {
+        padding: 12px;
+        border-radius: 12px;
+        border: none;
+        font-weight: 500;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+        cursor: pointer;
+        transition: all 0.25s ease;
+      }
 
-    #file-input { display: none; }
+      .upload-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
+      }
 
-    #file-list { flex: 1; overflow-y: auto; }
+      #file-list {
+        flex: 1;
+        overflow-y: auto;
+      }
 
-    .file-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #2a2a3e;
-      padding: 8px 10px;
-      border-radius: 6px;
-      margin-bottom: 6px;
-      font-size: 13px;
-    }
+      .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 10px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        transition: 0.2s;
+      }
 
-    .file-item span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 180px;
-    }
+      .file-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
 
-    .del-btn {
-      background: none;
-      border: none;
-      color: #ff5555;
-      cursor: pointer;
-      font-size: 16px;
-      padding: 0 4px;
-    }
+      .del-btn {
+        border: none;
+        background: none;
+        color: #f87171;
+        cursor: pointer;
+      }
 
-    #upload-status {
-      font-size: 12px;
-      color: #7aff7a;
-      min-height: 18px;
-    }
+      .chat-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
 
-    .chat-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
+      h2 {
+        margin: 0;
+        padding: 16px;
+        text-align: center;
+        color: white;
+        font-weight: 600;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        letter-spacing: 0.5px;
+      }
 
-    h2 {
-      margin: 0;
-      padding: 15px;
-      background: #007bff;
-      color: white;
-      text-align: center;
-    }
+      #chat {
+        flex: 1;
+        padding: 30px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
 
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      background: #f0f2f5;
-    }
+      .msg {
+        max-width: 65%;
+        padding: 14px 16px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.6;
+        animation: fadeIn 0.3s ease;
+      }
 
-    .msg {
-      padding: 10px 14px;
-      margin: 8px 0;
-      border-radius: 10px;
-      max-width: 70%;
-    }
+      .user {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+        border-bottom-right-radius: 6px;
+      }
 
-    .user {
-      background: #007bff;
-      color: white;
-      margin-left: auto;
-      text-align: right;
-    }
+      .bot {
+        align-self: flex-start;
+        background: white;
+        color: #111827;
+        border-bottom-left-radius: 6px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+      }
 
-    .bot {
-      background: #e4e6eb;
-      color: black;
-      margin-right: auto;
-    }
+      .bot p {
+        margin: 6px 0;
+      }
 
-    .bot h2, .bot h3 { font-size: 1em; margin: 6px 0 2px; }
-    .bot ul, .bot ol { padding-left: 18px; margin: 4px 0; }
-    .bot p { margin: 4px 0; }
+      .bot ul {
+        padding-left: 18px;
+      }
 
-    .input-box {
-      display: flex;
-      gap: 10px;
-      padding: 15px;
-      background: white;
-      border-top: 1px solid #ddd;
-    }
+      .input-box {
+        display: flex;
+        gap: 10px;
+        padding: 16px;
+        background: white;
+        border-top: 1px solid #eee;
+      }
 
-    input[type="text"] {
-      flex: 1;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      outline: none;
-      font-size: 14px;
-    }
+      input[type="text"] {
+        flex: 1;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid #ddd;
+        outline: none;
+        transition: 0.2s;
+      }
 
-    button.send-btn {
-      padding: 12px 18px;
-      border: none;
-      background: #007bff;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+      input[type="text"]:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+      }
 
-    button.send-btn:hover { background: #0056b3; }
-  </style>
-</head>
-<body>
+      .send-btn {
+        padding: 12px 18px;
+        border: none;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+        cursor: pointer;
+        transition: 0.25s;
+      }
 
-<div class="container">
+      .send-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
+      }
 
-  <div class="sidebar">
-    <h3>📄 PDF Files</h3>
-    <button class="upload-btn" onclick="document.getElementById('file-input').click()">
-      + Upload PDF
-    </button>
-    <input type="file" id="file-input" accept=".pdf" multiple onchange="uploadFiles(this)"/>
-    <div id="upload-status"></div>
-    <div id="file-list"></div>
-  </div>
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-  <div class="chat-area">
-    <h2>DocQuery</h2>
-    <div id="chat"></div>
-    <div class="input-box">
-      <input type="text" id="q" placeholder="Ask something..." onkeydown="if(event.key==='Enter') send()"/>
-      <button class="send-btn" onclick="send()">Send</button>
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #c7d2fe;
+        border-radius: 10px;
+      }
+
+      #file-input {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="sidebar">
+        <h3>📄 PDF Files</h3>
+        <button
+          class="upload-btn"
+          onclick="document.getElementById('file-input').click()"
+        >
+          + Upload PDF
+        </button>
+        <input
+          type="file"
+          id="file-input"
+          accept=".pdf"
+          multiple
+          onchange="uploadFiles(this)"
+        />
+        <div id="upload-status"></div>
+        <div id="file-list"></div>
+      </div>
+
+      <div class="chat-area">
+        <h2>DocQuery</h2>
+        <div id="chat"></div>
+        <div class="input-box">
+          <input
+            type="text"
+            id="q"
+            placeholder="Ask something..."
+            onkeydown="if (event.key === 'Enter') send();"
+          />
+          <button class="send-btn" onclick="send()">Send</button>
+        </div>
+      </div>
     </div>
-  </div>
 
-</div>
+    <script>
+      const API = "";
+      const WORD_LIMIT = 50;
 
-<script>
-const API = '';
-const WORD_LIMIT = 50;
+      const VALID_WORD_RE = /^[a-zA-Z\u00C0-\u024F\u0900-\u097F''\-\s]*$/;
 
-const VALID_WORD_RE = /^[a-zA-Z\u00C0-\u024F\u0900-\u097F''\-\s]*$/;
+      loadFiles();
 
-loadFiles();
+      async function loadFiles() {
+        const res = await fetch(API + "/api/files");
+        const data = await res.json();
+        renderFiles(data.files || []);
+      }
 
-async function loadFiles() {
-  const res = await fetch(API + '/api/files');
-  const data = await res.json();
-  renderFiles(data.files || []);
-}
-
-function renderFiles(files) {
-  const list = document.getElementById('file-list');
-  list.innerHTML = '';
-  if (files.length === 0) {
-    list.innerHTML = '<div style="color:#888;font-size:12px;">No PDFs uploaded yet</div>';
-    return;
-  }
-  files.forEach(f => {
-    const item = document.createElement('div');
-    item.className = 'file-item';
-    item.innerHTML = `
+      function renderFiles(files) {
+        const list = document.getElementById("file-list");
+        list.innerHTML = "";
+        if (files.length === 0) {
+          list.innerHTML =
+            '<div style="color:#888;font-size:12px;">No PDFs uploaded yet</div>';
+          return;
+        }
+        files.forEach((f) => {
+          const item = document.createElement("div");
+          item.className = "file-item";
+          item.innerHTML = `
       <span title="${f}">📄 ${f}</span>
       <button class="del-btn" onclick="deleteFile('${f}')" title="Delete">✕</button>
     `;
-    list.appendChild(item);
-  });
-}
+          list.appendChild(item);
+        });
+      }
 
-async function uploadFiles(input) {
-  const status = document.getElementById('upload-status');
-  const files = input.files;
-  if (!files.length) return;
+      async function uploadFiles(input) {
+        const status = document.getElementById("upload-status");
+        const files = input.files;
+        if (!files.length) return;
 
-  status.textContent = 'Uploading...';
-  const formData = new FormData();
-  for (const file of files) formData.append('files', file);
+        status.textContent = "Uploading...";
+        const formData = new FormData();
+        for (const file of files) formData.append("files", file);
 
-  const res = await fetch(API + '/api/upload', {
-    method: 'POST',
-    body: formData
-  });
-  const data = await res.json();
+        const res = await fetch(API + "/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
 
-  if (data.error) {
-    status.style.color = '#ff5555';
-    status.textContent = data.error;
-  } else {
-    status.style.color = '#7aff7a';
-    status.textContent = '✓ ' + data.message;
-    loadFiles();
-  }
-  input.value = '';
-  setTimeout(() => status.textContent = '', 4000);
-}
+        if (data.error) {
+          status.style.color = "#ff5555";
+          status.textContent = data.error;
+        } else {
+          status.style.color = "#7aff7a";
+          status.textContent = "✓ " + data.message;
+          loadFiles();
+        }
+        input.value = "";
+        setTimeout(() => (status.textContent = ""), 4000);
+      }
 
-async function deleteFile(filename) {
-  if (!confirm(`Delete ${filename}?`)) return;
-  const res = await fetch(API + `/api/files/${filename}`, { method: 'DELETE' });
-  const data = await res.json();
-  loadFiles();
-}
+      async function deleteFile(filename) {
+        if (!confirm(`Delete ${filename}?`)) return;
+        const res = await fetch(API + `/api/files/${filename}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        loadFiles();
+      }
 
-function add(role, text) {
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
+      function add(role, text) {
+        const div = document.createElement("div");
+        div.className = "msg " + role;
 
-  if (role === 'bot') {
-    const label = document.createElement('strong');
-    label.textContent = 'Doc:';
-    label.style.display = 'block';
-    label.style.marginBottom = '4px';
-    div.appendChild(label);
-    const content = document.createElement('div');
-    content.innerHTML = marked.parse(text);
-    div.appendChild(content);
-  } else {
-    div.textContent = 'You: ' + text;
-  }
+        if (role === "bot") {
+          const label = document.createElement("strong");
+          label.textContent = "Doc:";
+          label.style.display = "block";
+          label.style.marginBottom = "4px";
+          div.appendChild(label);
+          const content = document.createElement("div");
+          content.innerHTML = marked.parse(text);
+          div.appendChild(content);
+        } else {
+          div.textContent = "You: " + text;
+        }
 
-  document.getElementById('chat').appendChild(div);
-  document.getElementById('chat').scrollTop =
-    document.getElementById('chat').scrollHeight;
-}
+        document.getElementById("chat").appendChild(div);
+        document.getElementById("chat").scrollTop =
+          document.getElementById("chat").scrollHeight;
+      }
 
-async function send() {
-  const q = document.getElementById('q').value.trim();
-  if (!q) return;
+      async function send() {
+        const q = document.getElementById("q").value.trim();
+        if (!q) return;
 
-  add('user', q);
-  document.getElementById('q').value = '';
+        add("user", q);
+        document.getElementById("q").value = "";
 
-  const loading = document.createElement('div');
-  loading.className = 'msg bot';
-  loading.id = 'loading';
-  loading.textContent = 'Doc: Thinking...';
-  document.getElementById('chat').appendChild(loading);
+        const loading = document.createElement("div");
+        loading.className = "msg bot";
+        loading.id = "loading";
+        loading.textContent = "Doc: Thinking...";
+        document.getElementById("chat").appendChild(loading);
 
-  const res = await fetch(API + '/api/ask', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question: q })
-  });
+        const res = await fetch(API + "/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q }),
+        });
 
-  document.getElementById('loading').remove();
-  const data = await res.json();
-  add('bot', data.answer || data.error || 'Error');
-}
-</script>
-
-</body>
+        document.getElementById("loading").remove();
+        const data = await res.json();
+        add("bot", data.answer || data.error || "Error");
+      }
+    </script>
+  </body>
 </html>

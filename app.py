@@ -11,12 +11,19 @@ rag = None
 
 def load_rag():
     global rag
-    import main as rag_module
-    rag = rag_module
+    try:
+        import main as rag_module
+        rag = rag_module
+        print("✓ RAG loaded successfully")
+    except Exception as e:
+        print(f"✗ RAG failed to load: {e}")
+        import traceback
+        traceback.print_exc()
 
 threading.Thread(target=load_rag, daemon=True).start()
 
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
+os.makedirs(DOCS_DIR, exist_ok=True)
 
 @app.route("/")
 def index():

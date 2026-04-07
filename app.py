@@ -6,7 +6,15 @@ app = Flask(__name__, static_folder="static")
 CORS(app)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import main as rag
+import threading
+rag = None
+
+def load_rag():
+    global rag
+    import main as rag_module
+    rag = rag_module
+
+threading.Thread(target=load_rag, daemon=True).start()
 
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 

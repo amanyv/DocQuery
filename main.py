@@ -54,6 +54,8 @@ def reload():
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     print("  Vector store ready")
 
+os.makedirs(DOCS_DIR, exist_ok=True)
+os.makedirs(DB_DIR, exist_ok=True)
 reload()
 
 def ask(question):

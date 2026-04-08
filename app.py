@@ -17,6 +17,12 @@ def load_rag():
         import main as rag_module
         rag = rag_module
         print("✓ RAG loaded successfully")
+
+        pdf_files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
+        if pdf_files:
+            print(f"Found {len(pdf_files)} PDF(s) in Docs/, indexing now...")
+            threading.Thread(target=_reload_in_background, daemon=True).start()
+            
     except Exception as e:
         print(f"✗ RAG failed to load: {e}")
         import traceback
@@ -64,11 +70,8 @@ def status():
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
-    if rag is None:
-        return jsonify({"error": "Server is still loading, please wait 30 seconds and try again."}), 503
-    
     if reload_status["running"]:
-        return jsonify({"error": "Already indexing, please wait for the current upload to finish."}), 429
+        return jsonify({"error": "Already indexing, please wait."}), 429
     
     if "files" not in request.files:
         return jsonify({"error": "No files provided."}), 400
@@ -87,13 +90,15 @@ def upload():
     if not uploaded:
         return jsonify({"error": "No valid PDF files found."}), 400
     
-    threading.Thread(target=_reload_in_background, daemon=True).start()
- 
-    return jsonify({
-        "message": f"Uploaded {', '.join(uploaded)}. Indexing in background — check /api/status.",
-        "files": uploaded,
-        "indexing": True
-    })
+    if rag is not None:
+        threading.Thread(target=_reload_in_background, daemon=True).start()
+        msg = f"Uploaded {', '.join(uploaded)}. Indexing in background."
+        indexing = True
+    else:
+        msg = f"Uploaded {', '.join(uploaded)}. Server still warming up — upload again in ~30s to index."
+        indexing = False
+
+    return jsonify({"message": msg, "files": uploaded, "indexing": indexing})
 
 @app.route("/api/files", methods=["GET"])
 def list_files():

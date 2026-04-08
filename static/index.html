@@ -273,7 +273,9 @@
         const files = input.files;
         if (!files.length) return;
 
+        status.style.color = "#c7d2fe";
         status.textContent = "Uploading...";
+
         const formData = new FormData();
         for (const file of files) formData.append("files", file);
 
@@ -284,24 +286,59 @@
         const data = await res.json();
 
         if (data.error) {
-          status.style.color = "#ff5555";
+          status.style.color = "#f87171";
           status.textContent = data.error;
         } else {
           status.style.color = "#7aff7a";
-          status.textContent = "✓ " + data.message;
+          status.textContent = "✓ Uploaded! Indexing…";
           loadFiles();
+          startPolling();
         }
+
         input.value = "";
-        setTimeout(() => (status.textContent = ""), 4000);
       }
 
       async function deleteFile(filename) {
         if (!confirm(`Delete ${filename}?`)) return;
-        const res = await fetch(API + `/api/files/${filename}`, {
-          method: "DELETE",
-        });
-        const data = await res.json();
+        await fetch(API + `/api/files/${filename}`, { method: "DELETE" });
         loadFiles();
+        startPolling();
+      }
+
+      function startPolling() {
+        setIndexingUI(true);
+        if (pollInterval) return;
+        pollInterval = setInterval(async () => {
+          try {
+            const res = await fetch(API + "/api/status");
+            const data = await res.json();
+            if (!data.indexing) {
+              stopPolling();
+              const status = document.getElementById("upload-status");
+              if (data.error) {
+                status.style.color = "#f87171";
+                status.textContent = "✗ " + data.error;
+              } else if (data.ready) {
+                status.style.color = "#7aff7a";
+                status.textContent = "✓ Ready to answer questions!";
+                setTimeout(() => (status.textContent = ""), 4000);
+              }
+            }
+          } catch (e) {
+            console.warn("Status poll failed", e);
+          }
+        }, 2000);
+      }
+
+      function stopPolling() {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        setIndexingUI(false);
+      }
+ 
+      function setIndexingUI(isIndexing) {
+        document.getElementById("indexing-banner").style.display = isIndexing ? "flex" : "none";
+        document.getElementById("upload-btn").disabled = isIndexing;
       }
 
       function add(role, text) {
@@ -321,9 +358,9 @@
           div.textContent = "You: " + text;
         }
 
-        document.getElementById("chat").appendChild(div);
-        document.getElementById("chat").scrollTop =
-          document.getElementById("chat").scrollHeight;
+        const chat = document.getElementById("chat");
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
       }
 
       async function send() {

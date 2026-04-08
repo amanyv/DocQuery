@@ -1,4 +1,4 @@
-import sys, os, time, shutil
+import sys, os, time, threading
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
@@ -6,8 +6,9 @@ app = Flask(__name__, static_folder="static")
 CORS(app)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import threading
+
 rag = None
+reload_status = {"running": False, "error": None}
 
 def load_rag():
     global rag
@@ -26,6 +27,20 @@ threading.Thread(target=load_rag, daemon=True).start()
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 os.makedirs(DOCS_DIR, exist_ok=True)
 
+def _reload_in_background():
+    """Run rag.reload() in a background thread and track status."""
+    global reload_status
+    reload_status["running"] = True
+    reload_status["error"] = None
+    try:
+        rag.reload()
+        print("✓ Background reload complete")
+    except Exception as e:
+        print(f"✗ Background reload failed: {e}")
+        reload_status["error"] = str(e)
+    finally:
+        reload_status["running"] = False
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
@@ -33,18 +48,28 @@ def index():
 @app.route("/api/status")
 def status():
     ready = rag is not None and rag.retriever is not None
-    return jsonify({"ready": ready, "message": "RAG pipeline ready." if ready else "Server still loading, please wait..."})
+    indexing = reload_status["running"]
+    error = reload_status["error"]
+ 
+    if error:
+        msg = f"Indexing failed: {error}"
+    elif indexing:
+        msg = "Indexing your PDF, please wait..."
+    elif ready:
+        msg = "RAG pipeline ready."
+    else:
+        msg = "Server still loading, please wait..."
+ 
+    return jsonify({"ready": ready, "indexing": indexing, "error": error, "message": msg})
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
     if rag is None:
         return jsonify({"error": "Server is still loading, please wait 30 seconds and try again."}), 503
-    if rag.retriever is None:
-        print("Initializing RAG...")
-        try:
-            rag.reload()
-        except Exception as e:
-            return jsonify({"error": f"Failed to initialize RAG: {str(e)}"}), 500
+    
+    if reload_status["running"]:
+        return jsonify({"error": "Already indexing, please wait for the current upload to finish."}), 429
+    
     if "files" not in request.files:
         return jsonify({"error": "No files provided."}), 400
 
@@ -62,11 +87,13 @@ def upload():
     if not uploaded:
         return jsonify({"error": "No valid PDF files found."}), 400
     
-    try:
-        rag.reload()
-        return jsonify({"message": f"Uploaded and indexed: {', '.join(uploaded)}", "files": uploaded})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    threading.Thread(target=_reload_in_background, daemon=True).start()
+ 
+    return jsonify({
+        "message": f"Uploaded {', '.join(uploaded)}. Indexing in background — check /api/status.",
+        "files": uploaded,
+        "indexing": True
+    })
 
 @app.route("/api/files", methods=["GET"])
 def list_files():
@@ -76,11 +103,13 @@ def list_files():
 @app.route("/api/files/<filename>", methods=["DELETE"])
 def delete_file(filename):
     path = os.path.join(DOCS_DIR, filename)
-    if os.path.exists(path):
-        os.remove(path)
-        rag.reload()
-        return jsonify({"message": f"Deleted {filename}"})
-    return jsonify({"error": "File not found."}), 404
+    if not os.path.exists(path):
+        return jsonify({"error": "File not found."}), 404
+ 
+    os.remove(path)
+
+    threading.Thread(target=_reload_in_background, daemon=True).start()
+    return jsonify({"message": f"Deleted {filename}", "indexing": True})
 
 @app.route("/api/ask", methods=["POST"])
 def ask():
@@ -93,6 +122,8 @@ def ask():
     if rag is None:
         return jsonify({"error": "Server is still loading, please wait and try again."}), 503
     if rag.retriever is None:
+        if reload_status["running"]:
+            return jsonify({"error": "Still indexing your PDF. Please wait a moment and try again."}), 503
         return jsonify({"error": "No PDFs uploaded yet. Please upload a PDF first."}), 400
 
     MODELS = [

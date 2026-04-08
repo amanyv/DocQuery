@@ -12,6 +12,7 @@ rag = None
 def load_rag():
     global rag
     try:
+        print("Loading RAG...")
         import main as rag_module
         rag = rag_module
         print("✓ RAG loaded successfully")

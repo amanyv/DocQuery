@@ -13,14 +13,18 @@ DB_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
 
 print("Loading embedding model...")
 embeddings = HuggingFaceEmbeddings(
-    model_name="all-MiniLM-L6-v2",
-    cache_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_cache")
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={"device": "cpu"}
 )
 print("  Embedding model ready")
 
+api_key = os.getenv("OPENROUTER_API_KEY")
+if not api_key:
+    raise ValueError("OPENROUTER_API_KEY not set")
+
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY")
+    api_key=api_key
 )
 
 vectorstore = None
@@ -56,9 +60,16 @@ def reload():
 
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(DB_DIR, exist_ok=True)
-reload()
+
+try:
+    reload()
+except Exception as e:
+    print("Initial reload failed:", e)
 
 def ask(question):
+    if retriever is None:
+        return "No documents uploaded."
+    
     docs = retriever.invoke(question)
     context = ""
     for i, doc in enumerate(docs):
@@ -82,7 +93,7 @@ Question: {question}"""
         ]
     )
     answer = response.choices[0].message.content
-    print(f"\nAnswer: {answer}")
+    return answer
 
 if __name__ == "__main__":
     print("\nRAG ready! Type 'quit' to exit.\n")

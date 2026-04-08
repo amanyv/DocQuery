@@ -11,13 +11,6 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 DB_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
 
-print("Loading embedding model...")
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"}
-)
-print("  Embedding model ready")
-
 api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
     raise ValueError("OPENROUTER_API_KEY not set")
@@ -29,9 +22,18 @@ client = OpenAI(
 
 vectorstore = None
 retriever   = None
+embeddings  = None
 
 def reload():
-    global vectorstore, retriever
+    global vectorstore, retriever, embeddings
+
+    if embeddings is None:
+        print("Loading embedding model...")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"}
+        )
+        print("Embedding model ready")
 
     pdf_files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
     if not pdf_files:
@@ -61,10 +63,7 @@ def reload():
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(DB_DIR, exist_ok=True)
 
-try:
-    reload()
-except Exception as e:
-    print("Initial reload failed:", e)
+print("RAG will load on first upload...")
 
 def ask(question):
     if retriever is None:

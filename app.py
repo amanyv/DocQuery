@@ -96,7 +96,6 @@ def ask():
         "google/gemma-3-4b-it:free",
         "mistralai/mistral-7b-instruct:free",
         "qwen/qwen3-8b:free",
-        "deepseek/deepseek-r1-zero:free",
         "microsoft/phi-4-reasoning:free",
     ]
 

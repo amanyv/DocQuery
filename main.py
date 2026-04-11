@@ -1,4 +1,4 @@
-import os
+import os, shutil
 from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.document_loaders import PyPDFDirectoryLoader
@@ -52,12 +52,18 @@ def reload():
     print(f"  Created {len(chunks)} chunks")
 
     print("Rebuilding vector store...")
+
+    if os.path.exists(DB_DIR):
+        shutil.rmtree(DB_DIR)
+    os.makedirs(DB_DIR, exist_ok=True)
+
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
         persist_directory=DB_DIR
     )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
     print("  Vector store ready")
 
 os.makedirs(DOCS_DIR, exist_ok=True)
@@ -65,36 +71,8 @@ os.makedirs(DB_DIR, exist_ok=True)
 
 print("RAG will load on first upload...")
 
-def ask(question):
-    if retriever is None:
-        return "No documents uploaded."
-    
-    docs = retriever.invoke(question)
-    context = ""
-    for i, doc in enumerate(docs):
-        source = doc.metadata.get("source", "Unknown")
-        page = doc.metadata.get("page", 0)
-        context += f"[Source {i+1}: {source}, Page {page+1}]\n{doc.page_content}\n\n"
-
-    prompt = f"""You are a helpful assistant. Answer the question using only the context below.
-If the answer is not in the context, say "I don't know based on the provided documents."
-
-Context:
-{context}
-
-Question: {question}"""
-
-    response = client.chat.completions.create(
-        model="meta-llama/llama-3.3-70b-instruct:free",
-        messages=[
-            {"role": "system", "content": "You are a precise assistant. Always use markdown with ## headers and bullet points."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    answer = response.choices[0].message.content
-    return answer
-
 if __name__ == "__main__":
+    reload()
     print("\nRAG ready! Type 'quit' to exit.\n")
     while True:
         question = input("You: ").strip()
@@ -103,4 +81,10 @@ if __name__ == "__main__":
         if question.lower() in ["quit", "exit", "q"]:
             print("Goodbye!")
             break
-        ask(question)
+        if retriever is None:
+            print("No documents uploaded.")
+            continue
+        docs = retriever.invoke(question)
+        for doc in docs:
+            print(doc.page_content[:300])
+            print("---")

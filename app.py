@@ -1,5 +1,12 @@
 import sys, os, time, threading, logging
-from flask import Flask, request, jsonify, send_from_directory
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    send_from_directory,
+    Response,
+    stream_with_context,
+)
 from flask_cors import CORS
 
 
@@ -87,10 +94,10 @@ def get_docs_for_question(question: str):
 
     if is_overview and rag.vectorstore is not None:
         docs = rag.vectorstore.similarity_search(
-            "introduction overview summary purpose topics covered", k=8
+            "introduction overview summary purpose topics covered", k=4
         )
     else:
-        docs = rag.retriever.invoke(question)
+        docs = rag.retriever.invoke(question)[:3]
 
     return docs
 
@@ -102,7 +109,10 @@ def build_context(docs):
     for i, doc in enumerate(docs):
         source = doc.metadata.get("source", "Unknown")
         page = doc.metadata.get("page", 0)
-        context += f"[Source {i+1}: {os.path.basename(source)}, Page {page+1}]\n{doc.page_content}\n\n"
+        content = doc.page_content[:800]
+        context += (
+            f"[Source {i+1}: {os.path.basename(source)}, Page {page+1}]\n{content}\n\n"
+        )
         key = (os.path.basename(source), page + 1)
         if key not in seen:
             seen.add(key)
@@ -186,7 +196,7 @@ def delete_file(filename):
 
 @app.route("/api/ask", methods=["POST"])
 def ask():
-    import traceback
+    import traceback, json
 
     data = request.get_json()
     question = (data or {}).get("question", "").strip()
@@ -218,38 +228,52 @@ def ask():
         docs = get_docs_for_question(question)
         context, sources = build_context(docs)
 
-        prompt = f"""You are a helpful document assistant. Answer the question below using ONLY the provided context.
-
-Instructions:
-- Write in clear, natural paragraphs. Avoid excessive bullet points or large headers unless the content truly needs structure.
-- Be concise and direct. Get to the answer quickly.
-- For specific questions, mention the relevant page number naturally in your answer (e.g. "According to page 3...").
-- For overview/summary questions, give a well-organized but readable answer.
-- If the answer is not in the context, say: "I couldn't find this information in the uploaded documents."
-- Do NOT use knowledge outside the context.
+        prompt = f"""Answer using ONLY the context below. Be concise (2-4 sentences max unless the question requires more). Mention page numbers where relevant. If not found, say so.
 
 Context:
 {context}
 
 Question: {question}
-
 Answer:"""
 
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful document assistant. Write clear, natural prose. Be concise. Never use knowledge outside the provided context.",
+                "content": "You are a concise document assistant. Answer only from context. Be brief and direct.",
             },
             {"role": "user", "content": prompt},
         ]
 
-        response = rag.client.chat.completions.create(
-            model="openrouter/free",
-            messages=messages,
-            max_tokens=600,
+        def generate():
+            try:
+                yield f"data: {json.dumps({'sources': sources})}\n\n"
+
+                stream = rag.client.chat.completions.create(
+                    model="openrouter/free",
+                    messages=messages,
+                    max_tokens=300,
+                    stream=True,
+                )
+
+                for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        yield f"data: {json.dumps({'token': delta.content})}\n\n"
+
+                yield "data: [DONE]\n\n"
+
+            except Exception as e:
+                traceback.print_exc()
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
         )
-        answer = response.choices[0].message.content
-        return jsonify({"answer": answer, "sources": sources})
 
     except Exception as e:
         traceback.print_exc()
@@ -258,7 +282,7 @@ Answer:"""
 
 @app.route("/api/summarize", methods=["POST"])
 def summarize_all():
-    import traceback
+    import traceback, json
 
     if rag is None:
         return jsonify({"error": "Server is still loading, please wait."}), 503
@@ -272,18 +296,11 @@ def summarize_all():
 
     try:
         docs = rag.vectorstore.similarity_search(
-            "introduction overview summary purpose topics conclusions", k=10
+            "introduction overview summary purpose topics conclusions", k=5
         )
         context, _ = build_context(docs)
 
-        prompt = f"""You are a helpful document assistant. Summarize the document(s) below in clear, readable paragraphs.
-
-Instructions:
-- Write naturally, as if explaining to a colleague.
-- Cover the main purpose, key topics, and any important conclusions.
-- If multiple documents are present, briefly address each one.
-- Keep it concise — aim for 3 to 5 paragraphs total.
-- Do NOT use knowledge outside the context.
+        prompt = f"""Summarize the document(s) below in 2-3 short paragraphs. Cover the main purpose and key topics. Be concise.
 
 Context:
 {context}
@@ -293,18 +310,33 @@ Summary:"""
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful document assistant. Write in clear, natural paragraphs. Never use knowledge outside the provided context.",
+                "content": "You are a concise document assistant. Write short, clear summaries. Never use knowledge outside the provided context.",
             },
             {"role": "user", "content": prompt},
         ]
 
-        response = rag.client.chat.completions.create(
-            model="openrouter/free",
-            messages=messages,
-            max_tokens=700,
+        def generate():
+            try:
+                stream = rag.client.chat.completions.create(
+                    model="openrouter/free",
+                    messages=messages,
+                    max_tokens=400,
+                    stream=True,
+                )
+                for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        yield f"data: {json.dumps({'token': delta.content})}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                traceback.print_exc()
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-        answer = response.choices[0].message.content
-        return jsonify({"answer": answer})
 
     except Exception as e:
         traceback.print_exc()
@@ -313,4 +345,4 @@ Summary:"""
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    app.run(debug=False, host="0.0.0.0", port=port, threaded=True)

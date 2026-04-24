@@ -106,7 +106,6 @@
       .file-item:hover {
         background: rgba(255, 255, 255, 0.1);
       }
-
       .del-btn {
         border: none;
         background: none;
@@ -239,12 +238,30 @@
         font-weight: 600;
       }
 
+      .streaming-cursor::after {
+        content: "▋";
+        animation: blink 0.7s step-end infinite;
+        color: #6366f1;
+        font-size: 12px;
+      }
+
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0;
+        }
+      }
+
       .typing-indicator {
         display: flex;
         gap: 5px;
         align-items: center;
         padding: 2px 0;
       }
+
       .typing-indicator span {
         width: 8px;
         height: 8px;
@@ -252,6 +269,7 @@
         background: #a5b4fc;
         animation: bounce 1.2s infinite;
       }
+
       .typing-indicator span:nth-child(2) {
         animation-delay: 0.2s;
       }
@@ -318,6 +336,66 @@
         cursor: not-allowed;
       }
 
+      .qa-card {
+        background: white;
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+        animation: fadeIn 0.3s ease;
+      }
+
+      .qa-card .qa-question {
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 8px;
+        color: #312e81;
+      }
+
+      .qa-card .qa-answer {
+        font-size: 14px;
+        line-height: 1.65;
+        color: #1f2937;
+      }
+
+      .qa-card .qa-answer h1,
+      .qa-card .qa-answer h2,
+      .qa-card .qa-answer h3,
+      .qa-card .qa-answer h4 {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 10px 0 4px;
+        color: #312e81;
+      }
+
+      .qa-card .qa-answer p {
+        margin: 5px 0;
+      }
+      .qa-card .qa-answer ul,
+      .qa-card .qa-answer ol {
+        padding-left: 20px;
+        margin: 4px 0;
+      }
+      .qa-card .qa-answer strong {
+        color: #4338ca;
+        font-weight: 600;
+      }
+
+      .sources-row {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .source-chip {
+        background: #e0e7ff;
+        color: #4338ca;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+      }
+
       @keyframes fadeIn {
         from {
           opacity: 0;
@@ -375,7 +453,7 @@
         <h3>⚙️ Quick Actions</h3>
 
         <div class="quick-actions-section">
-          <button class="qa-btn blue" onclick="runQuickAction('summarize')">
+          <button class="qa-btn blue" onclick="runSummarize()">
             🧠 Summarize All
           </button>
           <button class="qa-btn red" onclick="clearContext()">
@@ -386,9 +464,7 @@
 
       <div class="chat-area">
         <h2>DocQuery</h2>
-
         <div id="chat"></div>
-
         <div class="input-box">
           <input
             type="text"
@@ -446,18 +522,14 @@
         const status = document.getElementById("upload-status");
         const files = input.files;
         if (!files.length) return;
-
         status.textContent = "Uploading...";
-
         const formData = new FormData();
         for (const file of files) formData.append("files", file);
-
         const res = await fetch(API + "/api/upload", {
           method: "POST",
           body: formData,
         });
         const data = await res.json();
-
         if (data.error) {
           status.textContent = "❌ " + data.error;
         } else {
@@ -499,16 +571,6 @@
         }, 2000);
       }
 
-      function addTyping() {
-        const div = document.createElement("div");
-        div.className = "msg bot";
-        div.id = "typing-bubble";
-        div.innerHTML = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
-        const chat = document.getElementById("chat");
-        chat.appendChild(div);
-        chat.scrollTop = chat.scrollHeight;
-      }
-
       function escapeHtml(text) {
         return text
           .replace(/&/g, "&amp;")
@@ -516,48 +578,11 @@
           .replace(/>/g, "&gt;");
       }
 
-      function addQACard(question, answerText) {
-        const typing = document.getElementById("typing-bubble");
-        if (typing) typing.remove();
-
-        const card = document.createElement("div");
-        card.style.cssText = `
-    background: white;
-    border-radius: 12px;
-    padding: 16px 20px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
-    margin-bottom: 4px;
-    animation: fadeIn 0.3s ease;
-  `;
-        card.innerHTML = `
-    <div style="font-weight:700;font-size:14px;margin-bottom:8px;">Q: ${escapeHtml(question)}</div>
-    <div style="font-size:14px;line-height:1.65;color:#1f2937;">${marked.parse(answerText)}</div>
-  `;
-        const chat = document.getElementById("chat");
-        chat.appendChild(card);
-        chat.scrollTop = chat.scrollHeight;
-      }
-
-      function add(role, text) {
-        const typing = document.getElementById("typing-bubble");
-        if (typing) typing.remove();
-
-        const div = document.createElement("div");
-        div.className = "msg " + role;
-        if (role === "bot") {
-          div.innerHTML = marked.parse(text);
-        } else {
-          div.textContent = text;
-        }
-        const chat = document.getElementById("chat");
-        chat.appendChild(div);
-        chat.scrollTop = chat.scrollHeight;
-      }
-
       function setLoading(val) {
         isLoading = val;
         document.getElementById("send-btn").disabled = val;
         document.getElementById("q").disabled = val;
+        document.querySelectorAll(".qa-btn").forEach((b) => (b.disabled = val));
       }
 
       async function send() {
@@ -567,7 +592,31 @@
 
         document.getElementById("q").value = "";
         setLoading(true);
-        addTyping();
+
+        const userDiv = document.createElement("div");
+        userDiv.className = "msg user";
+        userDiv.textContent = q;
+        const chat = document.getElementById("chat");
+        chat.appendChild(userDiv);
+        chat.scrollTop = chat.scrollHeight;
+
+        const card = document.createElement("div");
+        card.className = "qa-card";
+
+        const qDiv = document.createElement("div");
+        qDiv.className = "qa-question";
+        qDiv.textContent = "Q: " + q;
+
+        const aDiv = document.createElement("div");
+        aDiv.className = "qa-answer streaming-cursor";
+
+        card.appendChild(qDiv);
+        card.appendChild(aDiv);
+        chat.appendChild(card);
+        chat.scrollTop = chat.scrollHeight;
+
+        let rawText = "";
+        let sources = [];
 
         try {
           const res = await fetch(API + "/api/ask", {
@@ -575,28 +624,133 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ question: q }),
           });
-          const data = await res.json();
-          addQACard(q, data.answer || data.error || "Something went wrong.");
+
+          if (!res.ok) {
+            const err = await res.json();
+            aDiv.classList.remove("streaming-cursor");
+            aDiv.innerHTML = marked.parse(err.error || "Something went wrong.");
+            setLoading(false);
+            return;
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const payload = line.slice(6).trim();
+              if (payload === "[DONE]") break;
+
+              try {
+                const json = JSON.parse(payload);
+                if (json.error) {
+                  aDiv.classList.remove("streaming-cursor");
+                  aDiv.innerHTML = marked.parse(json.error);
+                } else if (json.sources) {
+                  sources = json.sources;
+                } else if (json.token) {
+                  rawText += json.token;
+                  aDiv.innerHTML = marked.parse(rawText);
+                  chat.scrollTop = chat.scrollHeight;
+                }
+              } catch (_) {}
+            }
+          }
         } catch (e) {
-          add("bot", "Network error. Please try again.");
-        } finally {
-          setLoading(false);
+          aDiv.classList.remove("streaming-cursor");
+          aDiv.innerHTML = marked.parse("Network error. Please try again.");
         }
+
+        aDiv.classList.remove("streaming-cursor");
+        aDiv.innerHTML = marked.parse(rawText || "No response received.");
+
+        if (sources.length > 0) {
+          const row = document.createElement("div");
+          row.className = "sources-row";
+          sources.forEach((s) => {
+            const chip = document.createElement("span");
+            chip.className = "source-chip";
+            chip.textContent = `📄 ${s.file} p.${s.page}`;
+            row.appendChild(chip);
+          });
+          card.appendChild(row);
+        }
+
+        chat.scrollTop = chat.scrollHeight;
+        setLoading(false);
       }
 
-      async function runQuickAction(action) {
+      async function runSummarize() {
         if (isLoading) return;
         setLoading(true);
-        addTyping();
+
+        const chat = document.getElementById("chat");
+        const botDiv = document.createElement("div");
+        botDiv.className = "msg bot streaming-cursor";
+        chat.appendChild(botDiv);
+        chat.scrollTop = chat.scrollHeight;
+
+        let rawText = "";
+
         try {
-          const res = await fetch(API + `/api/${action}`, { method: "POST" });
-          const data = await res.json();
-          add("bot", data.answer || data.error || "Something went wrong.");
+          const res = await fetch(API + "/api/summarize", { method: "POST" });
+
+          if (!res.ok) {
+            const err = await res.json();
+            botDiv.classList.remove("streaming-cursor");
+            botDiv.innerHTML = marked.parse(
+              err.error || "Something went wrong.",
+            );
+            setLoading(false);
+            return;
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const payload = line.slice(6).trim();
+              if (payload === "[DONE]") break;
+
+              try {
+                const json = JSON.parse(payload);
+                if (json.token) {
+                  rawText += json.token;
+                  botDiv.innerHTML = marked.parse(rawText);
+                  chat.scrollTop = chat.scrollHeight;
+                } else if (json.error) {
+                  botDiv.innerHTML = marked.parse(json.error);
+                }
+              } catch (_) {}
+            }
+          }
         } catch (e) {
-          add("bot", "Network error. Please try again.");
-        } finally {
-          setLoading(false);
+          botDiv.innerHTML = marked.parse("Network error. Please try again.");
         }
+
+        botDiv.classList.remove("streaming-cursor");
+        botDiv.innerHTML = marked.parse(rawText || "No summary available.");
+        chat.scrollTop = chat.scrollHeight;
+        setLoading(false);
       }
 
       function clearContext() {

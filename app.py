@@ -1,4 +1,5 @@
 import sys, os, time, threading, logging
+from supabase import create_client
 from flask import (
     Flask,
     request,
@@ -8,6 +9,11 @@ from flask import (
     stream_with_context,
 )
 from flask_cors import CORS
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 rag_lock = threading.Lock()
 reload_lock = threading.Lock()
@@ -58,7 +64,7 @@ reload_status = {
     "error": None,
 }
 
-DOCS_DIR = "/data/Docs"
+DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 os.makedirs(DOCS_DIR, exist_ok=True)
 
 

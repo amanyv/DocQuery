@@ -38,6 +38,9 @@ CORS(app)
 
 @app.before_request
 def log_request():
+    if request.path == "/api/status":
+        return
+
     logger.info(
         "REQ | %s %s | IP=%s",
         request.method,
@@ -49,9 +52,13 @@ def log_request():
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 rag = None
-reload_status = {"running": False, "error": None}
+reload_status = {
+    "indexing": False,
+    "ready": False,
+    "error": None,
+}
 
-DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
+DOCS_DIR = "/data/Docs"
 os.makedirs(DOCS_DIR, exist_ok=True)
 
 
@@ -76,19 +83,34 @@ threading.Thread(target=load_rag, daemon=True).start()
 
 
 def _reload_in_background():
-    global reload_status
-    reload_status["running"] = True
-    start_time = time.time()
-    logger.info("INDEXING START | files=%s", os.listdir(DOCS_DIR))
-    reload_status["error"] = None
-    try:
-        rag.reload()
-        logger.info("INDEXING DONE | time=%.2fs", time.time() - start_time)
-    except Exception as e:
-        logger.error("Background indexing failed", exc_info=True)
-        reload_status["error"] = str(e)
-    finally:
-        reload_status["running"] = False
+    global rag, reload_status
+
+    with reload_lock:
+        try:
+            reload_status["indexing"] = True
+            reload_status["ready"] = False
+            reload_status["error"] = None
+
+            logger.info("Reloading RAG...")
+
+            import importlib
+            import main as rag_module
+
+            importlib.reload(rag_module)
+
+            rag = rag_module
+
+            logger.info("RAG reload complete.")
+
+            reload_status["ready"] = True
+
+        except Exception as e:
+            logger.exception("BACKGROUND RELOAD FAILED")
+
+            reload_status["error"] = str(e)
+
+        finally:
+            reload_status["indexing"] = False
 
 
 OVERVIEW_KEYWORDS = {
@@ -205,7 +227,7 @@ def index():
 @app.route("/api/status")
 def status():
     ready = rag is not None and rag.retriever is not None
-    indexing = reload_status["running"]
+    indexing = reload_status["indexing"]
     error = reload_status["error"]
 
     if error:
@@ -224,7 +246,7 @@ def status():
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
-    if reload_status["running"]:
+    if reload_status["indexing"]:
         logger.warning("Upload rejected — already indexing")
         return jsonify({"error": "Already indexing, please wait."}), 429
 
@@ -328,7 +350,7 @@ def ask():
     )
 
     if rag.retriever is None:
-        if reload_status["running"]:
+        if reload_status["indexing"]:
             return (
                 jsonify(
                     {"error": "Still indexing your PDF. Please wait and try again."}
@@ -478,7 +500,7 @@ def summarize_all():
             jsonify({"error": "No PDFs uploaded yet. Please upload a PDF first."}),
             400,
         )
-    if reload_status["running"]:
+    if reload_status["indexing"]:
         return jsonify({"error": "Still indexing. Please wait a moment."}), 503
 
     try:

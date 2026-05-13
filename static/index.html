@@ -856,6 +856,8 @@
         document.getElementById("chat").innerHTML = "";
       }
 
+      let statusInterval = null;
+
       async function waitForReady() {
         try {
           const res = await fetch("/api/status");
@@ -868,12 +870,19 @@
           document.querySelectorAll(".qa-btn").forEach((btn) => {
             btn.disabled = !ready;
           });
+
+          if (ready && statusInterval) {
+            clearInterval(statusInterval);
+            statusInterval = null;
+            console.log("Status polling stopped");
+          }
         } catch (e) {
           console.error(e);
         }
       }
 
-      setInterval(waitForReady, 2000);
+      statusInterval = setInterval(waitForReady, 2000);
+
       waitForReady();
     </script>
   </body>

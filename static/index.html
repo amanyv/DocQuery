@@ -344,6 +344,19 @@
         animation: fadeIn 0.3s ease;
       }
 
+      .msg,
+      .bot,
+      .user,
+      .qa-card,
+      .qa-answer,
+      .qa-question {
+        max-width: 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
+
       .qa-card .qa-question {
         font-weight: 700;
         font-size: 14px;
@@ -432,6 +445,9 @@
         >
           + Upload PDF
         </button>
+        <div style="font-size: 11px; color: #9ca3af; text-align: center">
+          Max file size: 25MB
+        </div>
 
         <input
           type="file"
@@ -440,6 +456,10 @@
           multiple
           onchange="uploadFiles(this)"
         />
+
+        <div id="word-counter" style="font-size: 11px; color: #9ca3af">
+          0 / 50 words
+        </div>
 
         <div id="upload-status"></div>
 
@@ -478,9 +498,31 @@
     </div>
 
     <script>
+      function log(type, message, data = null) {
+        const time = new Date().toISOString();
+        console[type](`[${time}] ${message}`, data || "");
+      }
+
       const API = "";
+      const MAX_CHARS = 100;
       let pollInterval = null;
       let isLoading = false;
+      let chatHistory = [];
+
+      const input = document.getElementById("q");
+      const counter = document.getElementById("word-counter");
+
+      input.addEventListener("input", () => {
+        const chars = input.value.length;
+
+        counter.textContent = `${chars} / ${MAX_CHARS} characters`;
+
+        if (chars > MAX_CHARS) {
+          counter.style.color = "#f87171";
+        } else {
+          counter.style.color = "#9ca3af";
+        }
+      });
 
       loadFiles();
 
@@ -507,7 +549,15 @@
           span.title = f;
           span.style =
             "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-          span.textContent = "📄 " + f;
+          const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
+          const size = stored[f];
+
+          let sizeText = "";
+          if (size) {
+            sizeText = ` (${(size / (1024 * 1024)).toFixed(2)} MB)`;
+          }
+
+          span.textContent = "📄 " + f + sizeText;
           const btn = document.createElement("button");
           btn.className = "del-btn";
           btn.textContent = "✕";
@@ -522,7 +572,22 @@
         const status = document.getElementById("upload-status");
         const files = input.files;
         if (!files.length) return;
-        status.textContent = "Uploading...";
+
+        const MAX_SIZE = 25 * 1024 * 1024;
+
+        for (const file of files) {
+          if (file.size > MAX_SIZE) {
+            status.textContent = `❌ ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds 25MB`;
+            input.value = "";
+            return;
+          }
+        }
+        const namesWithSize = Array.from(files)
+          .map((f) => `${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB)`)
+          .join(", ");
+
+        status.textContent = `Uploading: ${namesWithSize}`;
+        log("info", "Uploading files", namesWithSize);
         const formData = new FormData();
         for (const file of files) formData.append("files", file);
         const res = await fetch(API + "/api/upload", {
@@ -530,9 +595,17 @@
           body: formData,
         });
         const data = await res.json();
+        console.log("[upload] server response:", data);
         if (data.error) {
+          const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
+          for (const file of files) {
+            stored[file.name] = file.size;
+          }
+          localStorage.setItem("fileSizes", JSON.stringify(stored));
+          console.error("[upload] error:", data.error);
           status.textContent = "❌ " + data.error;
         } else {
+          console.log("[upload] success, files:", data.files);
           status.textContent = "✓ Uploaded";
           setTimeout(() => (status.textContent = ""), 3000);
           loadFiles();
@@ -543,11 +616,13 @@
 
       async function deleteFile(filename) {
         if (!confirm(`Delete ${filename}?`)) return;
+        log("info", "Delete file", filename);
         const res = await fetch(
           API + `/api/files/${encodeURIComponent(filename)}`,
           { method: "DELETE" },
         );
         const data = await res.json();
+        console.log("[delete] response:", data);
         if (!data.error) {
           loadFiles();
           startPolling();
@@ -588,7 +663,15 @@
       async function send() {
         if (isLoading) return;
         const q = document.getElementById("q").value.trim();
+
+        if (q.length > MAX_CHARS) {
+          alert(`❌ Query too long. Max ${MAX_CHARS} characters allowed.`);
+          return;
+        }
+
         if (!q) return;
+        chatHistory.push({ role: "user", content: q });
+        log("info", "ASK sent", { question: q });
 
         document.getElementById("q").value = "";
         setLoading(true);
@@ -619,10 +702,11 @@
         let sources = [];
 
         try {
+          log("info", "Streaming started");
           const res = await fetch(API + "/api/ask", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: q }),
+            body: JSON.stringify({ question: q, history: chatHistory }),
           });
 
           if (!res.ok) {
@@ -653,25 +737,37 @@
               try {
                 const json = JSON.parse(payload);
                 if (json.error) {
+                  console.warn("[ask] stream error:", json.error);
                   aDiv.classList.remove("streaming-cursor");
                   aDiv.innerHTML = marked.parse(json.error);
                 } else if (json.sources) {
+                  console.log("[ask] sources:", json.sources);
                   sources = json.sources;
                 } else if (json.token) {
+                  log("debug", "Token", json.token);
                   rawText += json.token;
                   aDiv.innerHTML = marked.parse(rawText);
                   chat.scrollTop = chat.scrollHeight;
                 }
-              } catch (_) {}
+              } catch (err) {
+                console.error(
+                  "[ask] SSE parse error:",
+                  err,
+                  "raw payload:",
+                  payload,
+                );
+              }
             }
           }
         } catch (e) {
+          log("error", "Network error", e);
           aDiv.classList.remove("streaming-cursor");
           aDiv.innerHTML = marked.parse("Network error. Please try again.");
         }
 
         aDiv.classList.remove("streaming-cursor");
         aDiv.innerHTML = marked.parse(rawText || "No response received.");
+        chatHistory.push({ role: "assistant", content: rawText });
 
         if (sources.length > 0) {
           const row = document.createElement("div");
@@ -702,6 +798,7 @@
         let rawText = "";
 
         try {
+          console.log("[summarize] request sent");
           const res = await fetch(API + "/api/summarize", { method: "POST" });
 
           if (!res.ok) {
@@ -738,12 +835,14 @@
                   botDiv.innerHTML = marked.parse(rawText);
                   chat.scrollTop = chat.scrollHeight;
                 } else if (json.error) {
+                  console.warn("[summarize] stream error:", json.error);
                   botDiv.innerHTML = marked.parse(json.error);
                 }
               } catch (_) {}
             }
           }
         } catch (e) {
+          console.error("[summarize] network error:", e);
           botDiv.innerHTML = marked.parse("Network error. Please try again.");
         }
 

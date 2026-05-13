@@ -5,6 +5,8 @@ from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+from sentence_transformers import CrossEncoder
+
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
@@ -23,9 +25,10 @@ client = OpenAI(
 vectorstore = None
 retriever   = None
 embeddings  = None
+reranker = None
 
 def reload():
-    global vectorstore, retriever, embeddings
+    global vectorstore, retriever, embeddings, reranker
 
     if embeddings is None:
         print("Loading embedding model...")
@@ -34,6 +37,11 @@ def reload():
             model_kwargs={"device": "cpu"}
         )
         print("Embedding model ready")
+
+    if reranker is None:
+        print("Loading reranker...")
+        reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+        print("Reranker ready")
 
     pdf_files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
     if not pdf_files:
@@ -47,24 +55,59 @@ def reload():
     documents = loader.load()
     print(f"  Loaded {len(documents)} pages")
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = splitter.split_documents(documents)
-    print(f"  Created {len(chunks)} chunks")
-
     print("Rebuilding vector store...")
-
-    if os.path.exists(DB_DIR):
-        shutil.rmtree(DB_DIR)
-    os.makedirs(DB_DIR, exist_ok=True)
-
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=DB_DIR
+    vectorstore = Chroma(
+        persist_directory=DB_DIR,
+        embedding_function=embeddings
     )
+
+    existing_files = set()
+    if vectorstore._collection.count() > 0:
+        metadatas = vectorstore.get()["metadatas"]
+        existing_files = set(m.get("source") for m in metadatas if m.get("source"))
+
+    new_docs = [
+        d for d in documents
+        if d.metadata.get("source") not in existing_files
+    ]
+
+    print(f"New documents to add: {len(new_docs)}")
+
+    if new_docs:
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+        chunks = splitter.split_documents(new_docs)
+        vectorstore.add_documents(chunks)
+        vectorstore.persist()
+        print(f"Added {len(chunks)} chunks")
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
     print("  Vector store ready")
+
+def delete_document(source_path: str):
+    """Remove all chunks belonging to a specific source file from the vector store."""
+    global vectorstore, retriever
+
+    if vectorstore is None:
+        return
+
+    results = vectorstore.get(where={"source": source_path})
+    ids_to_delete = results["ids"]
+
+    if not ids_to_delete:
+        print(f"No chunks found for {source_path}")
+        return
+
+    vectorstore.delete(ids=ids_to_delete)
+    print(f"Deleted {len(ids_to_delete)} chunks for {source_path}")
+
+    if vectorstore._collection.count() == 0:
+        vectorstore = None
+        retriever = None
+    else:
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
 
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(DB_DIR, exist_ok=True)

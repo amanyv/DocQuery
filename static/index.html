@@ -855,6 +855,26 @@
       function clearContext() {
         document.getElementById("chat").innerHTML = "";
       }
+
+      async function waitForReady() {
+        try {
+          const res = await fetch("/api/status");
+          const data = await res.json();
+
+          const ready = data.ready && !data.indexing;
+
+          document.getElementById("send-btn").disabled = !ready;
+
+          document.querySelectorAll(".qa-btn").forEach((btn) => {
+            btn.disabled = !ready;
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      setInterval(waitForReady, 2000);
+      waitForReady();
     </script>
   </body>
 </html>

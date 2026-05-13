@@ -1,12 +1,20 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 flask
 flask-cors
 python-dotenv
 openai
+
 langchain
 langchain-community
 langchain-text-splitters
 langchain-huggingface
+
 sentence-transformers
+
+torch==2.2.2+cpu
+
 chromadb
 pypdf
-rank-bm25
+
+gunicorn

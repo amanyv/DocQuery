@@ -118,10 +118,10 @@ def get_docs_for_question(query: str):
 
     if is_overview and rag.vectorstore is not None:
         initial_docs = rag.vectorstore.similarity_search(
-            "introduction overview summary purpose topics covered", k=10
+            "introduction overview summary purpose topics covered", k=5
         )
     else:
-        initial_docs = rag.retriever.invoke(query)[:10]
+        initial_docs = rag.retriever.invoke(query)[:5]
 
     if rag.reranker and len(initial_docs) > 0:
         pairs = [[query, doc.page_content] for doc in initial_docs]
@@ -422,7 +422,7 @@ Answer:
                 stream = rag.client.chat.completions.create(
                     model="openrouter/free",
                     messages=messages,
-                    max_tokens=500,
+                    max_tokens=300,
                     stream=True,
                     temperature=0.3,
                 )
@@ -508,7 +508,7 @@ Summary:"""
                 stream = rag.client.chat.completions.create(
                     model="openrouter/free",
                     messages=messages,
-                    max_tokens=1000,
+                    max_tokens=400,
                     stream=True,
                 )
                 for chunk in stream:

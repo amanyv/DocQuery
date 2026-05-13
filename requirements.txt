@@ -1,20 +1,23 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
-flask
-flask-cors
-python-dotenv
-openai
+flask==3.0.3
+flask-cors==4.0.1
+python-dotenv==1.0.1
+openai==1.30.1
 
-langchain
-langchain-community
-langchain-text-splitters
-langchain-huggingface
+langchain==0.2.1
+langchain-community==0.2.1
+langchain-text-splitters==0.2.0
+langchain-huggingface==0.0.3
 
-sentence-transformers
+sentence-transformers==2.7.0
+transformers==4.41.2
 
-torch==2.2.2+cpu
+torch==2.3.1+cpu
 
-chromadb
-pypdf
+numpy==1.26.4
 
-gunicorn
+chromadb==0.5.0
+pypdf==4.2.0
+
+gunicorn==22.0.0

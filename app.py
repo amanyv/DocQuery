@@ -13,7 +13,18 @@ from flask_cors import CORS
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = None
+
+try:
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("Supabase connected successfully")
+    else:
+        print("Supabase environment variables missing")
+
+except Exception as e:
+    print("Supabase initialization failed:", e)
+    supabase = None
 
 rag_lock = threading.Lock()
 reload_lock = threading.Lock()
@@ -279,16 +290,22 @@ def upload():
 
         file.save(save_path)
 
-        with open(save_path, "rb") as f:
-            supabase.storage.from_("DocQuery").upload(
-                file.filename,
-                f,
-                {
-                    "content-type": "application/pdf",
-                    "upsert": "true"
-                }
-            )
-            
+        if supabase:
+            try:
+                with open(save_path, "rb") as f:
+                    supabase.storage.from_("DocQuery").upload(
+                        file.filename,
+                        f,
+                        {
+                            "content-type": "application/pdf",
+                            "upsert": "true"
+                        }
+                    )
+                logger.info("Uploaded to Supabase: %s", file.filename)
+
+            except Exception as e:
+                logger.error("Supabase upload failed: %s", str(e))
+
         uploaded.append(file.filename)
 
     if not uploaded:

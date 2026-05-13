@@ -276,7 +276,19 @@ def upload():
             return jsonify({"error": f"{file.filename} exceeds 25MB limit."}), 400
 
         save_path = os.path.join(DOCS_DIR, file.filename)
+
         file.save(save_path)
+
+        with open(save_path, "rb") as f:
+            supabase.storage.from_("DocQuery").upload(
+                file.filename,
+                f,
+                {
+                    "content-type": "application/pdf",
+                    "upsert": "true"
+                }
+            )
+            
         uploaded.append(file.filename)
 
     if not uploaded:

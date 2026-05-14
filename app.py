@@ -118,6 +118,7 @@ def _reload_in_background():
             rag = rag_module
 
             rag.reload()
+            logger.info("RAG indexing finished successfully")
             logger.info("Retriever ready: %s", rag.retriever is not None)
 
             logger.info("RAG reload complete.")

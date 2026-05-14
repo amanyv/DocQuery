@@ -5,7 +5,6 @@ from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from sentence_transformers import CrossEncoder
 
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
@@ -25,23 +24,18 @@ client = OpenAI(
 vectorstore = None
 retriever   = None
 embeddings  = None
-reranker = None
 
 def reload():
-    global vectorstore, retriever, embeddings, reranker
+    global vectorstore, retriever, embeddings
 
     if embeddings is None:
         print("Loading embedding model...")
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
             model_kwargs={"device": "cpu"}
         )
         print("Embedding model ready")
 
-    # if reranker is None:
-    #     print("Loading reranker...")
-    #     reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-    #     print("Reranker ready")
 
     pdf_files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
     if not pdf_files:

@@ -69,11 +69,16 @@ def reload():
 
     if new_docs:
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=700,
-            chunk_overlap=120
+            chunk_size=500,
+            chunk_overlap=80
         )
         chunks = splitter.split_documents(new_docs)
-        vectorstore.add_documents(chunks)
+        BATCH_SIZE = 8
+
+        for i in range(0, len(chunks), BATCH_SIZE):
+            batch = chunks[i:i+BATCH_SIZE]
+            vectorstore.add_documents(batch)
+            print(f"Added batch {i//BATCH_SIZE + 1}")
         vectorstore.persist()
         print(f"Added {len(chunks)} chunks")
 

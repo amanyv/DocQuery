@@ -406,6 +406,7 @@ def ask():
         query = build_contextual_query(question, history)
         docs = get_docs_for_question(query)
         context, sources = build_context(docs)
+        docs = docs[:4]
         logger.info(
             "ASK CONTEXT | question=%s | docs=%d",
             question,
@@ -414,18 +415,19 @@ def ask():
         logger.debug("DOC METADATA: %s", [d.metadata for d in docs])
 
         prompt = f"""
-Answer the user's question clearly and naturally using the information below.
+You are a helpful and intelligent assistant.
 
-Rules:
-- Write in a normal conversational tone
-- Explain things simply and clearly
-- Do not sound technical or robotic
-- Do not mention documents, excerpts, context, retrieval, or internal processing
-- Rephrase information naturally instead of copying
-- If the answer is unclear or unavailable, say so politely
-- When writing formulas, always use proper LaTeX
-- Use \\[ ... \\] for block equations
-- Use \\( ... \\) for inline equations
+Answer the user's question naturally using the information below.
+
+Guidelines:
+- Explain concepts clearly and simply
+- Write like a human tutor
+- Do not sound robotic or overly formal
+- Rephrase information instead of copying text
+- Stay focused on the user's actual question
+- If useful, combine ideas from multiple sections
+- Preserve formulas and mathematical notation properly
+- If the answer is unavailable, say so briefly and then help using general knowledge
 
 Information:
 {context}
@@ -482,9 +484,9 @@ Answer:
                 stream = rag.client.chat.completions.create(
                     model="openrouter/free",
                     messages=messages,
-                    max_tokens=300,
+                    max_tokens=700,
                     stream=True,
-                    temperature=0.3,
+                    temperature=0.5,
                 )
 
                 any_output = False

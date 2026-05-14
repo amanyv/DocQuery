@@ -69,8 +69,8 @@ def reload():
 
     if new_docs:
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
+            chunk_size=700,
+            chunk_overlap=120
         )
         chunks = splitter.split_documents(new_docs)
         vectorstore.add_documents(chunks)
@@ -101,7 +101,7 @@ def delete_document(source_path: str):
         vectorstore = None
         retriever = None
     else:
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
 
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(DB_DIR, exist_ok=True)

@@ -117,6 +117,8 @@ def _reload_in_background():
 
             rag = rag_module
 
+            rag.reload()
+
             logger.info("RAG reload complete.")
 
             reload_status["ready"] = True

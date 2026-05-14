@@ -458,7 +458,7 @@
         />
 
         <div id="word-counter" style="font-size: 11px; color: #9ca3af">
-          0 / 50 words
+          0 / 100 characters
         </div>
 
         <div id="upload-status"></div>
@@ -601,7 +601,7 @@
           console.error("[upload] error:", data.error);
           status.textContent = "❌ " + data.error;
         } else {
-          
+
           const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
 
           for (const file of files) {

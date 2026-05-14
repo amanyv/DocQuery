@@ -33,15 +33,15 @@ def reload():
     if embeddings is None:
         print("Loading embedding model...")
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={"device": "cpu"}
         )
         print("Embedding model ready")
 
-    if reranker is None:
-        print("Loading reranker...")
-        reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        print("Reranker ready")
+    # if reranker is None:
+    #     print("Loading reranker...")
+    #     reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    #     print("Reranker ready")
 
     pdf_files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
     if not pdf_files:

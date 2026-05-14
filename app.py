@@ -165,7 +165,7 @@ def get_docs_for_question(query: str):
     else:
         initial_docs = rag.retriever.invoke(query)[:5]
 
-    if rag.reranker and len(initial_docs) > 0:
+    if False:
         pairs = [[query, doc.page_content] for doc in initial_docs]
         scores = rag.reranker.predict(pairs)
 

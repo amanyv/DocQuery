@@ -12,7 +12,7 @@ langchain-text-splitters==0.2.0
 langchain-huggingface==0.0.1
 
 sentence-transformers==2.6.1
-torch==2.1.2
+torch==2.2.2
 
 numpy==1.26.4
 supabase==2.4.5

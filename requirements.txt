@@ -16,7 +16,7 @@ torch==2.2.2
 
 numpy==1.26.4
 supabase==2.4.5
-chromadb==0.5.0
+chromadb==0.4.24
 pypdf==4.2.0
 
 gunicorn==22.0.0

@@ -96,9 +96,6 @@ def load_rag():
             logger.error("RAG failed to load", exc_info=True)
 
 
-threading.Thread(target=load_rag, daemon=True).start()
-
-
 def _reload_in_background():
     global rag, reload_status
 

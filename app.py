@@ -313,6 +313,8 @@ def upload():
 
     if rag is not None:
         logger.info("UPLOAD | files=%s | count=%d", uploaded, len(uploaded))
+        reload_status["indexing"] = True
+        reload_status["ready"] = False
         threading.Thread(target=_reload_in_background, daemon=True).start()
         indexing = True
         msg = f"Uploaded {', '.join(uploaded)}. Indexing in background."

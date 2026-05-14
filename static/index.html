@@ -597,14 +597,19 @@
         const data = await res.json();
         console.log("[upload] server response:", data);
         if (data.error) {
-          const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
-          for (const file of files) {
-            stored[file.name] = file.size;
-          }
-          localStorage.setItem("fileSizes", JSON.stringify(stored));
+          
           console.error("[upload] error:", data.error);
           status.textContent = "❌ " + data.error;
         } else {
+          
+          const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
+
+          for (const file of files) {
+            stored[file.name] = file.size;
+          }
+
+          localStorage.setItem("fileSizes", JSON.stringify(stored));
+
           console.log("[upload] success, files:", data.files);
           status.textContent = "✓ Uploaded";
           setTimeout(() => (status.textContent = ""), 3000);
@@ -631,18 +636,35 @@
 
       function startPolling() {
         const banner = document.getElementById("indexing-banner");
+
         banner.style.display = "flex";
+
         if (pollInterval) return;
         pollInterval = setInterval(async () => {
           try {
             const res = await fetch(API + "/api/status");
             const data = await res.json();
-            if (!data.indexing) {
+
+            console.log("status:", data);
+
+            const ready = data.ready && !data.indexing;
+            document.getElementById("send-btn").disabled = !ready;
+
+            document.querySelectorAll(".qa-btn").forEach((btn) => {
+              btn.disabled = !ready;
+            });
+
+            if (ready) {
               clearInterval(pollInterval);
               pollInterval = null;
+            
               banner.style.display = "none";
+
+              console.log("Polling stopped");
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error(e);
+          }
         }, 2000);
       }
 
@@ -855,35 +877,6 @@
       function clearContext() {
         document.getElementById("chat").innerHTML = "";
       }
-
-      let statusInterval = null;
-
-      async function waitForReady() {
-        try {
-          const res = await fetch("/api/status");
-          const data = await res.json();
-
-          const ready = data.ready && !data.indexing;
-
-          document.getElementById("send-btn").disabled = !ready;
-
-          document.querySelectorAll(".qa-btn").forEach((btn) => {
-            btn.disabled = !ready;
-          });
-
-          if (ready && statusInterval) {
-            clearInterval(statusInterval);
-            statusInterval = null;
-            console.log("Status polling stopped");
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      statusInterval = setInterval(waitForReady, 2000);
-
-      waitForReady();
     </script>
   </body>
 </html>

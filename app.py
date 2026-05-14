@@ -118,6 +118,7 @@ def _reload_in_background():
             rag = rag_module
 
             rag.reload()
+            logger.info("Retriever ready: %s", rag.retriever is not None)
 
             logger.info("RAG reload complete.")
 
@@ -313,16 +314,16 @@ def upload():
     if not uploaded:
         return jsonify({"error": "No valid PDF files found."}), 400
 
-    if rag is not None:
-        logger.info("UPLOAD | files=%s | count=%d", uploaded, len(uploaded))
-        reload_status["indexing"] = True
-        reload_status["ready"] = False
-        threading.Thread(target=_reload_in_background, daemon=True).start()
-        indexing = True
-        msg = f"Uploaded {', '.join(uploaded)}. Indexing in background."
-    else:
-        indexing = False
-        msg = f"Uploaded {', '.join(uploaded)}. Server still warming up — upload again in ~30s to index."
+    logger.info("UPLOAD | files=%s | count=%d", uploaded, len(uploaded))
+
+    reload_status["indexing"] = True
+    reload_status["ready"] = False
+    reload_status["error"] = None
+
+    threading.Thread(target=_reload_in_background, daemon=True).start()
+
+    indexing = True
+    msg = f"Uploaded {', '.join(uploaded)}. Indexing in background."
 
     return jsonify({"message": msg, "files": uploaded, "indexing": indexing})
 

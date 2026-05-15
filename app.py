@@ -35,7 +35,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("app.log"),
     ],
 )
 logger = logging.getLogger("docquery")
@@ -204,9 +203,9 @@ def build_contextual_query(question, history):
         )
 
         resp = rag.client.chat.completions.create(
-            model="openrouter/free",
+            model="openai/gpt-oss-120b:free",
             messages=messages,
-            max_tokens=50,
+            max_tokens=25,
             temperature=0.0,
         )
 
@@ -353,7 +352,7 @@ def delete_file(filename):
 
     os.remove(path)
     logger.info("Deleted file: %s", filename)
-    return jsonify({"message": f"Deleted {filename}", "indexing": True})
+    return jsonify({"message": f"Deleted {filename}", "indexing": False})
 
 
 @app.route("/api/ask", methods=["POST"])
@@ -363,7 +362,6 @@ def ask():
     data = request.get_json()
     question = (data or {}).get("question", "").strip()
     logger.info("ASK START | question=%s", question)
-    history = (data or {}).get("history", [])
     MAX_WORDS = 50
     word_count = len(question.split())
     if word_count > MAX_WORDS:
@@ -403,7 +401,7 @@ def ask():
     try:
         history = (data or {}).get("history", [])
 
-        query = build_contextual_query(question, history)
+        query = question
         docs = get_docs_for_question(query)
         context, sources = build_context(docs)
         docs = docs[:4]
@@ -482,9 +480,9 @@ Answer:
                 yield f"data: {json.dumps({'sources': sources})}\n\n"
 
                 stream = rag.client.chat.completions.create(
-                    model="openrouter/free",
+                    model="openai/gpt-oss-120b:free",
                     messages=messages,
-                    max_tokens=700,
+                    max_tokens=250,
                     stream=True,
                     temperature=0.5,
                 )
@@ -568,7 +566,7 @@ Summary:"""
         def generate():
             try:
                 stream = rag.client.chat.completions.create(
-                    model="openrouter/free",
+                    model="openai/gpt-oss-120b:free",
                     messages=messages,
                     max_tokens=400,
                     stream=True,
@@ -594,5 +592,7 @@ Summary:"""
 
 
 if __name__ == "__main__":
+    load_rag()
+
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port, threaded=True)

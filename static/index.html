@@ -3,6 +3,23 @@
   <head>
     <title>DocQuery</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension/lib/index.umd.js"></script>
+
+    <script>
+      marked.use(
+        markedKatex({
+          throwOnError: false,
+        }),
+      );
+    </script>
     <style>
       * {
         box-sizing: border-box;
@@ -597,11 +614,9 @@
         const data = await res.json();
         console.log("[upload] server response:", data);
         if (data.error) {
-          
           console.error("[upload] error:", data.error);
           status.textContent = "❌ " + data.error;
         } else {
-
           const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
 
           for (const file of files) {
@@ -630,7 +645,6 @@
         console.log("[delete] response:", data);
         if (!data.error) {
           loadFiles();
-          startPolling();
         }
       }
 
@@ -657,7 +671,7 @@
             if (ready) {
               clearInterval(pollInterval);
               pollInterval = null;
-            
+
               banner.style.display = "none";
 
               console.log("Polling stopped");
@@ -692,7 +706,6 @@
         }
 
         if (!q) return;
-        chatHistory.push({ role: "user", content: q });
         log("info", "ASK sent", { question: q });
 
         document.getElementById("q").value = "";
@@ -701,6 +714,10 @@
         const userDiv = document.createElement("div");
         userDiv.className = "msg user";
         userDiv.textContent = q;
+        chatHistory.push({
+          role: "user",
+          content: q,
+        });
         const chat = document.getElementById("chat");
         chat.appendChild(userDiv);
         chat.scrollTop = chat.scrollHeight;
@@ -708,14 +725,9 @@
         const card = document.createElement("div");
         card.className = "qa-card";
 
-        const qDiv = document.createElement("div");
-        qDiv.className = "qa-question";
-        qDiv.textContent = "Q: " + q;
-
         const aDiv = document.createElement("div");
         aDiv.className = "qa-answer streaming-cursor";
 
-        card.appendChild(qDiv);
         card.appendChild(aDiv);
         chat.appendChild(card);
         chat.scrollTop = chat.scrollHeight;
@@ -768,7 +780,15 @@
                 } else if (json.token) {
                   log("debug", "Token", json.token);
                   rawText += json.token;
+
+                  rawText = rawText
+                    .replace(/\\\[/g, "$$")
+                    .replace(/\\\]/g, "$$")
+                    .replace(/\\\(/g, "$")
+                    .replace(/\\\)/g, "$");
+
                   aDiv.innerHTML = marked.parse(rawText);
+
                   chat.scrollTop = chat.scrollHeight;
                 }
               } catch (err) {
@@ -788,8 +808,14 @@
         }
 
         aDiv.classList.remove("streaming-cursor");
+
+        rawText = rawText
+          .replace(/\\\[/g, "$$")
+          .replace(/\\\]/g, "$$")
+          .replace(/\\\(/g, "$")
+          .replace(/\\\)/g, "$");
+
         aDiv.innerHTML = marked.parse(rawText || "No response received.");
-        chatHistory.push({ role: "assistant", content: rawText });
 
         if (sources.length > 0) {
           const row = document.createElement("div");
@@ -804,6 +830,12 @@
         }
 
         chat.scrollTop = chat.scrollHeight;
+
+        chatHistory.push({
+          role: "assistant",
+          content: rawText,
+        });
+
         setLoading(false);
       }
 
@@ -854,7 +886,15 @@
                 const json = JSON.parse(payload);
                 if (json.token) {
                   rawText += json.token;
+
+                  rawText = rawText
+                    .replace(/\\\[/g, "$$")
+                    .replace(/\\\]/g, "$$")
+                    .replace(/\\\(/g, "$")
+                    .replace(/\\\)/g, "$");
+
                   botDiv.innerHTML = marked.parse(rawText);
+
                   chat.scrollTop = chat.scrollHeight;
                 } else if (json.error) {
                   console.warn("[summarize] stream error:", json.error);
@@ -869,7 +909,15 @@
         }
 
         botDiv.classList.remove("streaming-cursor");
+
+        rawText = rawText
+          .replace(/\\\[/g, "$$")
+          .replace(/\\\]/g, "$$")
+          .replace(/\\\(/g, "$")
+          .replace(/\\\)/g, "$");
+
         botDiv.innerHTML = marked.parse(rawText || "No summary available.");
+
         chat.scrollTop = chat.scrollHeight;
         setLoading(false);
       }

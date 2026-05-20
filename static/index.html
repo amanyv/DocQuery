@@ -27,6 +27,7 @@
 
       body {
         margin: 0;
+        overflow: hidden;
         font-family: "Inter", system-ui, sans-serif;
         background: linear-gradient(135deg, #e0e7ff, #f8fafc);
       }
@@ -72,10 +73,18 @@
         box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
       }
 
+      #upload-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
       #upload-status {
         font-size: 12px;
         color: #a5f3a0;
         text-align: center;
+        min-height: 18px;
+        transition: color 0.3s ease;
       }
 
       #indexing-banner {
@@ -117,17 +126,25 @@
         border-radius: 10px;
         margin-bottom: 8px;
         font-size: 13px;
-        transition: 0.2s;
+        transition: all 0.2s ease;
       }
 
       .file-item:hover {
         background: rgba(255, 255, 255, 0.1);
+        transform: translateX(2px);
       }
+
       .del-btn {
         border: none;
         background: none;
         color: #f87171;
         cursor: pointer;
+        padding: 4px;
+        transition: transform 0.2s ease;
+      }
+
+      .del-btn:hover {
+        transform: scale(1.2);
       }
 
       .quick-actions-section {
@@ -184,6 +201,9 @@
         flex: 1;
         display: flex;
         flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        position: relative;
       }
 
       h2 {
@@ -200,9 +220,12 @@
         flex: 1;
         padding: 30px;
         overflow-y: auto;
+        overflow-x: hidden;
         display: flex;
         flex-direction: column;
         gap: 12px;
+        min-height: 0;
+        scroll-behavior: smooth;
       }
 
       .msg {
@@ -227,6 +250,11 @@
         color: #1f2937;
         border-bottom-left-radius: 6px;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      }
+
+      .bot.error {
+        background: #fee2e2;
+        border-left: 4px solid #ef4444;
       }
 
       .bot h1,
@@ -320,7 +348,7 @@
         border: 1px solid #ddd;
         outline: none;
         font-size: 14px;
-        transition: 0.2s;
+        transition: all 0.2s ease;
       }
 
       input[type="text"]:focus {
@@ -330,6 +358,15 @@
 
       input[type="text"]:disabled {
         background: #f9fafb;
+        cursor: not-allowed;
+      }
+
+      input[type="text"].warning {
+        border-color: #fbbf24;
+      }
+
+      input[type="text"].error-border {
+        border-color: #f87171;
       }
 
       .send-btn {
@@ -340,7 +377,7 @@
         color: white;
         cursor: pointer;
         font-weight: 500;
-        transition: 0.25s;
+        transition: all 0.25s ease;
       }
 
       .send-btn:hover:not(:disabled) {
@@ -351,6 +388,7 @@
       .send-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        transform: none;
       }
 
       .qa-card {
@@ -365,13 +403,11 @@
       .bot,
       .user,
       .qa-card,
-      .qa-answer,
       .qa-question {
         max-width: 100%;
         min-width: 0;
         overflow-wrap: anywhere;
         word-break: break-word;
-        white-space: pre-wrap;
       }
 
       .qa-card .qa-question {
@@ -383,8 +419,9 @@
 
       .qa-card .qa-answer {
         font-size: 14px;
-        line-height: 1.65;
+        line-height: 1.5;
         color: #1f2937;
+        white-space: normal;
       }
 
       .qa-card .qa-answer h1,
@@ -398,7 +435,7 @@
       }
 
       .qa-card .qa-answer p {
-        margin: 5px 0;
+        margin: 2px 0;
       }
       .qa-card .qa-answer ul,
       .qa-card .qa-answer ol {
@@ -407,6 +444,24 @@
       }
       .qa-card .qa-answer strong {
         color: #4338ca;
+        font-weight: 600;
+      }
+
+      .qa-answer table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+      }
+
+      .qa-answer th,
+      .qa-answer td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+      }
+
+      .qa-answer th {
+        background: #f3f4f6;
         font-weight: 600;
       }
 
@@ -426,6 +481,35 @@
         font-weight: 500;
       }
 
+      .scroll-hint {
+        position: absolute;
+        bottom: 80px;
+        right: 30px;
+        background: rgba(99, 102, 241, 0.95);
+        color: white;
+        padding: 10px 16px;
+        border-radius: 25px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .scroll-hint.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .scroll-hint:hover {
+        background: rgba(99, 102, 241, 1);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+      }
+
       @keyframes fadeIn {
         from {
           opacity: 0;
@@ -437,6 +521,20 @@
         }
       }
 
+      .skeleton-pulse {
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
       ::-webkit-scrollbar {
         width: 6px;
       }
@@ -444,9 +542,26 @@
         background: #c7d2fe;
         border-radius: 10px;
       }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #a5b4fc;
+      }
 
       #file-input {
         display: none;
+      }
+
+      #word-counter {
+        font-size: 11px;
+        color: #9ca3af;
+        transition: color 0.3s ease;
+      }
+
+      #word-counter.warning {
+        color: #fbbf24;
+      }
+
+      #word-counter.error {
+        color: #f87171;
       }
     </style>
   </head>
@@ -474,7 +589,7 @@
           onchange="uploadFiles(this)"
         />
 
-        <div id="word-counter" style="font-size: 11px; color: #9ca3af">
+        <div id="word-counter">
           0 / 100 characters
         </div>
 
@@ -502,6 +617,9 @@
       <div class="chat-area">
         <h2>DocQuery</h2>
         <div id="chat"></div>
+        <div class="scroll-hint" id="scroll-hint" onclick="scrollToBottom()">
+          ↓ New messages
+        </div>
         <div class="input-box">
           <input
             type="text"
@@ -515,32 +633,111 @@
     </div>
 
     <script>
+      
       function log(type, message, data = null) {
         const time = new Date().toISOString();
         console[type](`[${time}] ${message}`, data || "");
       }
 
+      function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func(...args), wait);
+        };
+      }
+
+      function escapeHtml(text) {
+        return text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function smoothScrollToBottom(container, force = false) {
+        if (!container) return;
+        
+        const isNearBottom = 
+          container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+        
+        if (isNearBottom || force) {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }
+
+      function scrollToBottom() {
+        const chat = document.getElementById("chat");
+        chat.scrollTo({
+          top: chat.scrollHeight,
+          behavior: 'smooth'
+        });
+        updateScrollHint();
+      }
+
+      function updateScrollHint() {
+        const chat = document.getElementById("chat");
+        const hint = document.getElementById("scroll-hint");
+        
+        if (!chat || !hint) return;
+        
+        const isAtBottom = 
+          chat.scrollHeight - chat.scrollTop - chat.clientHeight < 50;
+        
+        if (isAtBottom) {
+          hint.classList.remove('visible');
+        } else {
+          hint.classList.add('visible');
+        }
+      }
+
+      function showError(message, container) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'msg bot error';
+        errorDiv.innerHTML = `<strong>⚠️ Error:</strong> ${escapeHtml(message)}`;
+        container.appendChild(errorDiv);
+        smoothScrollToBottom(container, true);
+      }
+
+      
       const API = "";
       const MAX_CHARS = 100;
       let pollInterval = null;
       let isLoading = false;
       let chatHistory = [];
+      let rafId = null;
+      let pendingUpdate = false;
 
+      
       const input = document.getElementById("q");
       const counter = document.getElementById("word-counter");
+      const chat = document.getElementById("chat");
 
-      input.addEventListener("input", () => {
+      
+      const updateCounter = debounce(() => {
         const chars = input.value.length;
+        const percentage = (chars / MAX_CHARS) * 100;
 
         counter.textContent = `${chars} / ${MAX_CHARS} characters`;
 
-        if (chars > MAX_CHARS) {
-          counter.style.color = "#f87171";
-        } else {
-          counter.style.color = "#9ca3af";
-        }
-      });
+        counter.classList.remove('warning', 'error');
+        input.classList.remove('warning', 'error-border');
 
+        if (chars > MAX_CHARS) {
+          counter.classList.add('error');
+          input.classList.add('error-border');
+        } else if (percentage > 80) {
+          counter.classList.add('warning');
+          input.classList.add('warning');
+        }
+      }, 100);
+
+      input.addEventListener("input", updateCounter);
+      
+      chat.addEventListener('scroll', debounce(updateScrollHint, 100));
+      
       loadFiles();
 
       async function loadFiles() {
@@ -548,7 +745,9 @@
           const res = await fetch(API + "/api/files");
           const data = await res.json();
           renderFiles(data.files || []);
-        } catch (e) {}
+        } catch (e) {
+          log("error", "Failed to load files", e);
+        }
       }
 
       function renderFiles(files) {
@@ -587,6 +786,7 @@
 
       async function uploadFiles(input) {
         const status = document.getElementById("upload-status");
+        const uploadBtn = document.getElementById("upload-btn");
         const files = input.files;
         if (!files.length) return;
 
@@ -595,71 +795,109 @@
         for (const file of files) {
           if (file.size > MAX_SIZE) {
             status.textContent = `❌ ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds 25MB`;
+            status.style.color = "#f87171";
+            setTimeout(() => {
+              status.textContent = "";
+              status.style.color = "#a5f3a0";
+            }, 4000);
             input.value = "";
             return;
           }
         }
+
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = "Uploading...";
+        
         const namesWithSize = Array.from(files)
           .map((f) => `${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB)`)
           .join(", ");
 
-        status.textContent = `Uploading: ${namesWithSize}`;
+        status.textContent = `⏳ Uploading: ${namesWithSize}`;
+        status.style.color = "#c7d2fe";
         log("info", "Uploading files", namesWithSize);
-        const formData = new FormData();
-        for (const file of files) formData.append("files", file);
-        const res = await fetch(API + "/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
-        console.log("[upload] server response:", data);
-        if (data.error) {
-          console.error("[upload] error:", data.error);
-          status.textContent = "❌ " + data.error;
-        } else {
-          const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
 
-          for (const file of files) {
-            stored[file.name] = file.size;
+        try {
+          const formData = new FormData();
+          for (const file of files) formData.append("files", file);
+          
+          const res = await fetch(API + "/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          console.log("[upload] server response:", data);
+
+          if (data.error) {
+            console.error("[upload] error:", data.error);
+            status.textContent = "❌ " + data.error;
+            status.style.color = "#f87171";
+          } else {
+            const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
+
+            for (const file of files) {
+              stored[file.name] = file.size;
+            }
+
+            localStorage.setItem("fileSizes", JSON.stringify(stored));
+
+            console.log("[upload] success, files:", data.files);
+            status.textContent = "✅ Uploaded successfully";
+            status.style.color = "#a5f3a0";
+            setTimeout(() => status.textContent = "", 3000);
+            loadFiles();
+            startPolling();
           }
-
-          localStorage.setItem("fileSizes", JSON.stringify(stored));
-
-          console.log("[upload] success, files:", data.files);
-          status.textContent = "✓ Uploaded";
-          setTimeout(() => (status.textContent = ""), 3000);
-          loadFiles();
-          startPolling();
+        } catch (e) {
+          log("error", "Upload failed", e);
+          status.textContent = "❌ Upload failed. Please try again.";
+          status.style.color = "#f87171";
+        } finally {
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = "+ Upload PDF";
+          input.value = "";
         }
-        input.value = "";
       }
 
       async function deleteFile(filename) {
         if (!confirm(`Delete ${filename}?`)) return;
         log("info", "Delete file", filename);
-        const res = await fetch(
-          API + `/api/files/${encodeURIComponent(filename)}`,
-          { method: "DELETE" },
-        );
-        const data = await res.json();
-        console.log("[delete] response:", data);
-        if (!data.error) {
-          loadFiles();
+        
+        try {
+          const res = await fetch(
+            API + `/api/files/${encodeURIComponent(filename)}`,
+            { method: "DELETE" },
+          );
+          const data = await res.json();
+          console.log("[delete] response:", data);
+          
+          if (!data.error) {
+            const stored = JSON.parse(localStorage.getItem("fileSizes") || "{}");
+            delete stored[filename];
+            localStorage.setItem("fileSizes", JSON.stringify(stored));
+            
+            loadFiles();
+          } else {
+            alert("Failed to delete file: " + data.error);
+          }
+        } catch (e) {
+          log("error", "Delete failed", e);
+          alert("Failed to delete file. Please try again.");
         }
       }
 
+      
       function startPolling() {
         const banner = document.getElementById("indexing-banner");
-
         banner.style.display = "flex";
 
         if (pollInterval) return;
+        
         pollInterval = setInterval(async () => {
           try {
             const res = await fetch(API + "/api/status");
             const data = await res.json();
 
-            console.log("status:", data);
+            console.log("[polling] status:", data);
 
             const ready = data.ready && !data.indexing;
             document.getElementById("send-btn").disabled = !ready;
@@ -671,24 +909,16 @@
             if (ready) {
               clearInterval(pollInterval);
               pollInterval = null;
-
               banner.style.display = "none";
-
-              console.log("Polling stopped");
+              console.log("[polling] stopped - ready");
             }
           } catch (e) {
-            console.error(e);
+            console.error("[polling] error:", e);
           }
         }, 5000);
       }
 
-      function escapeHtml(text) {
-        return text
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-      }
-
+      
       function setLoading(val) {
         isLoading = val;
         document.getElementById("send-btn").disabled = val;
@@ -696,6 +926,27 @@
         document.querySelectorAll(".qa-btn").forEach((b) => (b.disabled = val));
       }
 
+      
+      function scheduleRender(element, rawText, container) {
+        if (!pendingUpdate) {
+          pendingUpdate = true;
+          rafId = requestAnimationFrame(() => {
+            element.innerHTML = marked.parse(rawText);
+            smoothScrollToBottom(container);
+            pendingUpdate = false;
+          });
+        }
+      }
+
+      function processLatexEscapes(text) {
+        return text
+          .replace(/\\\[/g, "$$")
+          .replace(/\\\]/g, "$$")
+          .replace(/\\\(/g, "$")
+          .replace(/\\\)/g, "$");
+      }
+
+      
       async function send() {
         if (isLoading) return;
         const q = document.getElementById("q").value.trim();
@@ -709,6 +960,7 @@
         log("info", "ASK sent", { question: q });
 
         document.getElementById("q").value = "";
+        updateCounter();
         setLoading(true);
 
         const userDiv = document.createElement("div");
@@ -718,9 +970,8 @@
           role: "user",
           content: q,
         });
-        const chat = document.getElementById("chat");
         chat.appendChild(userDiv);
-        chat.scrollTop = chat.scrollHeight;
+        smoothScrollToBottom(chat, true);
 
         const card = document.createElement("div");
         card.className = "qa-card";
@@ -730,7 +981,7 @@
 
         card.appendChild(aDiv);
         chat.appendChild(card);
-        chat.scrollTop = chat.scrollHeight;
+        smoothScrollToBottom(chat, true);
 
         let rawText = "";
         let sources = [];
@@ -780,16 +1031,9 @@
                 } else if (json.token) {
                   log("debug", "Token", json.token);
                   rawText += json.token;
+                  rawText = processLatexEscapes(rawText);
 
-                  rawText = rawText
-                    .replace(/\\\[/g, "$$")
-                    .replace(/\\\]/g, "$$")
-                    .replace(/\\\(/g, "$")
-                    .replace(/\\\)/g, "$");
-
-                  aDiv.innerHTML = marked.parse(rawText);
-
-                  chat.scrollTop = chat.scrollHeight;
+                  scheduleRender(aDiv, rawText, chat);
                 }
               } catch (err) {
                 console.error(
@@ -804,17 +1048,11 @@
         } catch (e) {
           log("error", "Network error", e);
           aDiv.classList.remove("streaming-cursor");
-          aDiv.innerHTML = marked.parse("Network error. Please try again.");
+          aDiv.innerHTML = marked.parse("❌ Network error. Please try again.");
         }
 
         aDiv.classList.remove("streaming-cursor");
-
-        rawText = rawText
-          .replace(/\\\[/g, "$$")
-          .replace(/\\\]/g, "$$")
-          .replace(/\\\(/g, "$")
-          .replace(/\\\)/g, "$");
-
+        rawText = processLatexEscapes(rawText);
         aDiv.innerHTML = marked.parse(rawText || "No response received.");
 
         if (sources.length > 0) {
@@ -829,7 +1067,7 @@
           card.appendChild(row);
         }
 
-        chat.scrollTop = chat.scrollHeight;
+        smoothScrollToBottom(chat, true);
 
         chatHistory.push({
           role: "assistant",
@@ -839,15 +1077,15 @@
         setLoading(false);
       }
 
+      
       async function runSummarize() {
         if (isLoading) return;
         setLoading(true);
 
-        const chat = document.getElementById("chat");
         const botDiv = document.createElement("div");
         botDiv.className = "msg bot streaming-cursor";
         chat.appendChild(botDiv);
-        chat.scrollTop = chat.scrollHeight;
+        smoothScrollToBottom(chat, true);
 
         let rawText = "";
 
@@ -886,16 +1124,9 @@
                 const json = JSON.parse(payload);
                 if (json.token) {
                   rawText += json.token;
-
-                  rawText = rawText
-                    .replace(/\\\[/g, "$$")
-                    .replace(/\\\]/g, "$$")
-                    .replace(/\\\(/g, "$")
-                    .replace(/\\\)/g, "$");
-
-                  botDiv.innerHTML = marked.parse(rawText);
-
-                  chat.scrollTop = chat.scrollHeight;
+                  rawText = processLatexEscapes(rawText);
+                  
+                  scheduleRender(botDiv, rawText, chat);
                 } else if (json.error) {
                   console.warn("[summarize] stream error:", json.error);
                   botDiv.innerHTML = marked.parse(json.error);
@@ -905,26 +1136,30 @@
           }
         } catch (e) {
           console.error("[summarize] network error:", e);
-          botDiv.innerHTML = marked.parse("Network error. Please try again.");
+          botDiv.innerHTML = marked.parse("❌ Network error. Please try again.");
         }
 
         botDiv.classList.remove("streaming-cursor");
-
-        rawText = rawText
-          .replace(/\\\[/g, "$$")
-          .replace(/\\\]/g, "$$")
-          .replace(/\\\(/g, "$")
-          .replace(/\\\)/g, "$");
-
+        rawText = processLatexEscapes(rawText);
         botDiv.innerHTML = marked.parse(rawText || "No summary available.");
 
-        chat.scrollTop = chat.scrollHeight;
+        smoothScrollToBottom(chat, true);
         setLoading(false);
       }
 
+      
       function clearContext() {
-        document.getElementById("chat").innerHTML = "";
+        if (chat.children.length === 0) return;
+        
+        if (confirm("Clear all chat messages?")) {
+          chat.innerHTML = "";
+          chatHistory = [];
+          log("info", "Chat cleared");
+        }
       }
+      
+      console.log("DocQuery initialized");
+      updateScrollHint();
     </script>
   </body>
 </html>

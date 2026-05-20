@@ -1,3 +1,4 @@
 .env
+Docs/
 chroma_db/
 __pycache__/

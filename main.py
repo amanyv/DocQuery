@@ -1,16 +1,22 @@
-import os, shutil
+import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from langchain_community.document_loaders import PyPDFDirectoryLoader
+from langchain_community.document_loaders import PyPDFLoader, PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-
+from sentence_transformers import CrossEncoder
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 DB_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
+
+TOP_K = 8
+FETCH_K = 20
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
+BATCH_SIZE = 150
 
 api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
@@ -24,109 +30,103 @@ client = OpenAI(
 vectorstore = None
 retriever   = None
 embeddings  = None
+reranker    = None
 
-def reload():
-    global vectorstore, retriever, embeddings
+def init_rag():
+    """Initializes the models and loads existing DB on startup."""
+    global vectorstore, retriever, embeddings, reranker
+    
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    os.makedirs(DB_DIR, exist_ok=True)
 
     if embeddings is None:
         print("Loading embedding model...")
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={"device": "cpu"}
         )
-        print("Embedding model ready")
 
+    if reranker is None:
+        print("Loading reranker model (CrossEncoder)...")
+        reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
 
-    pdf_files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
-    if not pdf_files:
-        print("  No PDFs found, skipping vector store build.")
-        vectorstore = None
-        retriever = None
-        return
-    
-    print("Loading pdfs...")
-    loader = PyPDFDirectoryLoader(DOCS_DIR)
-    documents = loader.load()
-    print(f"  Loaded {len(documents)} pages")
-
-    print("Rebuilding vector store...")
     vectorstore = Chroma(
         persist_directory=DB_DIR,
-        embedding_function=embeddings
+        embedding_function=embeddings,
+        collection_name="docquery"
     )
 
-    existing_files = set()
-    if vectorstore._collection.count() > 0:
-        metadatas = vectorstore.get()["metadatas"]
-        existing_files = set(m.get("source") for m in metadatas if m.get("source"))
+    existing_ids = vectorstore.get()["ids"]
+    if len(existing_ids) > 0:
+        retriever = vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": TOP_K, "fetch_k": FETCH_K}
+        )
+        print("Existing vector DB loaded.")
 
-    new_docs = [
-        d for d in documents
-        if d.metadata.get("source") not in existing_files
-    ]
+def add_documents(file_paths):
+    """Processes ONLY the specific new files uploaded by the user."""
+    global vectorstore, retriever
+    
+    if not file_paths:
+        return
 
-    print(f"New documents to add: {len(new_docs)}")
+    print(f"Incremental Indexing: Processing {len(file_paths)} new file(s)...")
+    new_docs = []
+    
+    for path in file_paths:
+        abs_path = os.path.abspath(path)
+        loader = PyPDFLoader(abs_path)
+        new_docs.extend(loader.load())
 
     if new_docs:
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=80
+            chunk_size=CHUNK_SIZE,
+            chunk_overlap=CHUNK_OVERLAP
         )
         chunks = splitter.split_documents(new_docs)
-        BATCH_SIZE = 8
 
         for i in range(0, len(chunks), BATCH_SIZE):
             batch = chunks[i:i+BATCH_SIZE]
             vectorstore.add_documents(batch)
-            print(f"Added batch {i//BATCH_SIZE + 1}")
-        vectorstore.persist()
-        print(f"Added {len(chunks)} chunks")
+        
+        print(f"Successfully added {len(chunks)} new chunks to the database.")
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
-    print("  Vector store ready")
+    retriever = vectorstore.as_retriever(
+        search_type="mmr", 
+        search_kwargs={"k": TOP_K, "fetch_k": FETCH_K}
+    )
 
 def delete_document(source_path: str):
-    """Remove all chunks belonging to a specific source file from the vector store."""
+    """Batch deletes chunks to bypass SQLite limits."""
     global vectorstore, retriever
 
     if vectorstore is None:
         return
 
-    results = vectorstore.get(where={"source": source_path})
-    ids_to_delete = results["ids"]
+    source_path = os.path.abspath(source_path)
+    results = vectorstore.get()
+    ids_to_delete = []
+
+    for i, meta in enumerate(results["metadatas"]):
+        stored = os.path.abspath(meta.get("source", ""))
+        if stored == source_path:
+            ids_to_delete.append(results["ids"][i])
 
     if not ids_to_delete:
         print(f"No chunks found for {source_path}")
         return
 
-    vectorstore.delete(ids=ids_to_delete)
+    for i in range(0, len(ids_to_delete), 500):
+        batch_ids = ids_to_delete[i:i+500]
+        vectorstore.delete(ids=batch_ids)
+        
     print(f"Deleted {len(ids_to_delete)} chunks for {source_path}")
 
-    if vectorstore._collection.count() == 0:
-        vectorstore = None
+    if len(vectorstore.get()["ids"]) == 0:
         retriever = None
     else:
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
-
-os.makedirs(DOCS_DIR, exist_ok=True)
-os.makedirs(DB_DIR, exist_ok=True)
-
-print("RAG will load on first upload...")
+        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": TOP_K, "fetch_k": FETCH_K})
 
 if __name__ == "__main__":
-    reload()
-    print("\nRAG ready! Type 'quit' to exit.\n")
-    while True:
-        question = input("You: ").strip()
-        if not question:
-            continue
-        if question.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-            break
-        if retriever is None:
-            print("No documents uploaded.")
-            continue
-        docs = retriever.invoke(question)
-        for doc in docs:
-            print(doc.page_content[:300])
-            print("---")
+    init_rag()

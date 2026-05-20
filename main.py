@@ -16,7 +16,7 @@ TOP_K = 8
 FETCH_K = 20
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
-BATCH_SIZE = 150
+BATCH_SIZE = 10
 
 api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:

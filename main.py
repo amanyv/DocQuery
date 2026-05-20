@@ -50,9 +50,9 @@ def init_rag():
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
 
-    if reranker is None:
-        print("Loading reranker model (CrossEncoder)...")
-        reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
+    # if reranker is None:
+    #     print("Loading reranker model (CrossEncoder)...")
+    #     reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
 
     vectorstore = Chroma(
         persist_directory=DB_DIR,

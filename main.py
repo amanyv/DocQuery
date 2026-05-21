@@ -5,7 +5,6 @@ from langchain_community.document_loaders import PyPDFLoader, PyPDFDirectoryLoad
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from sentence_transformers import CrossEncoder
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 

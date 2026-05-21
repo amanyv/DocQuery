@@ -9,7 +9,6 @@ langchain-community>=0.2,<0.3
 langchain-text-splitters>=0.2,<0.3
 langchain-google-genai>=1.0.3
 
-numpy==1.26.4
 supabase==2.4.5
 chromadb==0.4.24
 pypdf==4.2.0

@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.document_loaders import PyPDFLoader, PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from sentence_transformers import CrossEncoder
 
@@ -16,7 +16,7 @@ TOP_K = 8
 FETCH_K = 20
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
-BATCH_SIZE = 10
+BATCH_SIZE = 100
 
 api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
@@ -40,10 +40,14 @@ def init_rag():
     os.makedirs(DB_DIR, exist_ok=True)
 
     if embeddings is None:
-        print("Loading local embedding model...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"}
+        print("Connecting to Google Gemini Embedding API...")
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key:
+            raise ValueError("GEMINI_API_KEY not set in environment variables")
+            
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001",
+            google_api_key=gemini_key
         )
 
     # if reranker is None:

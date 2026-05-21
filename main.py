@@ -45,7 +45,7 @@ def init_rag():
             raise ValueError("GEMINI_API_KEY not set in environment variables")
             
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/text-embedding-004",
             google_api_key=gemini_key
         )
 

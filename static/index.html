@@ -747,10 +747,14 @@
       
       window.addEventListener('DOMContentLoaded', () => {
         console.log("[DocQuery] Running window load session reset...");
-        fetch(API + "/api/reset", { method: 'POST' })
+        fetch(API + "/api/reset", { 
+          method: 'POST',
+          headers: { "X-User-ID": userId }
+        })
           .then(res => res.json())
           .then(data => {
             console.log("[DocQuery] Backend database cleared successfully:", data);
+            localStorage.removeItem("fileSizes");
             loadFiles();
           })
           .catch(err => {

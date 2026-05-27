@@ -241,11 +241,36 @@ def upload():
 
 @app.route('/api/reset', methods=['POST'])
 def reset_session():
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "Unauthorized."}), 401
+
     try:
         set_indexing_status(False, None)
+        
+        if supabase:
+            supabase.table("documents").delete().eq("metadata->>user_id", user_id).execute()
+            
+            try:
+                files_res = supabase.storage.from_("DocQuery").list(user_id)
+                if files_res:
+                    files_to_remove = [f"{user_id}/{f['name']}" for f in files_res if f['name'] != '.emptyFolderPlaceholder']
+                    if files_to_remove:
+                        supabase.storage.from_("DocQuery").remove(files_to_remove)
+            except Exception as e:
+                logger.error(f"Failed to clear Supabase storage on reset: {e}")
+
+        user_dir = os.path.join(DOCS_DIR, user_id)
+        if os.path.exists(user_dir):
+            for filename in os.listdir(user_dir):
+                file_path = os.path.join(user_dir, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
         return jsonify({"status": "success", "message": "Environment reset successfully"}), 200
         
     except Exception as e:
+        logger.error(f"Session reset failed: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/files", methods=["GET"])

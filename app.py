@@ -122,7 +122,7 @@ def get_docs_for_question(query: str, user_id: str):
         "match_documents",
         {
             "query_embedding": query_embedding,
-            "match_count": 8,
+            "match_count": 20,
             "filter": {"user_id": user_id}
         }
     ).execute()
@@ -342,6 +342,7 @@ Guidelines:
 2. Analysis & Advice: If the user asks for feedback, summaries, or improvements (like reviewing a resume), evaluate the Information using your general knowledge, but keep your advice highly relevant to the provided text.
 3. Citations: YOU MUST CITE YOUR SOURCES. Whenever you reference specific details from the text, append the exact source tag at the end of the sentence (e.g., [Source 1, p.4 - doc.pdf]).
 4. Refusal: If the provided Information is completely blank or unrelated to the user's question, state: "I cannot answer this based on the provided documents."
+5. Math Formatting: ALWAYS wrap mathematical formulas in $$ for block equations, and $ for inline equations. Do not use markdown code blocks for math.
 
 Information:
 {context}

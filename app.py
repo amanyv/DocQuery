@@ -122,7 +122,7 @@ def get_docs_for_question(query: str, user_id: str):
         "match_documents",
         {
             "query_embedding": query_embedding,
-            "match_count": 20,
+            "match_count": 8,
             "filter": {"user_id": user_id}
         }
     ).execute()

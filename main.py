@@ -5,7 +5,6 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import SupabaseVectorStore
-from sentence_transformers import CrossEncoder
 from supabase.client import Client, create_client
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
@@ -27,11 +26,10 @@ client = OpenAI(
 vectorstore = None
 embeddings  = None
 supabase_client: Client = None
-reranker = None
 
 def init_rag():
     """Initializes the models and connects to Supabase pgvector."""
-    global vectorstore, embeddings, supabase_client, reranker
+    global vectorstore, embeddings, supabase_client
 
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -57,11 +55,6 @@ def init_rag():
         query_name="match_documents"
     )
     print("Connected to Supabase Vector Store.")
-
-    if reranker is None:
-        print("Loading Cross-Encoder Reranker (this takes a few seconds on first run)...")
-        reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=512)
-        print("Reranker loaded successfully!")
 
 def add_documents(file_paths, user_id):
     """Processes new files, tags them, and uploads vectors to Supabase."""

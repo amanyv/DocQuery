@@ -1,18 +1,15 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from langchain_community.document_loaders import PyPDFLoader, PyPDFDirectoryLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import SupabaseVectorStore
+from supabase.client import Client, create_client
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
-DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
-DB_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
-
 TOP_K = 8
-FETCH_K = 20
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 BATCH_SIZE = 100
@@ -27,60 +24,56 @@ client = OpenAI(
 )
 
 vectorstore = None
-retriever   = None
 embeddings  = None
-reranker    = None
+supabase_client: Client = None
 
 def init_rag():
-    """Initializes the models and loads existing DB on startup."""
-    global vectorstore, retriever, embeddings, reranker
+    """Initializes the models and connects to Supabase pgvector."""
+    global vectorstore, embeddings, supabase_client
+
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("🚨 CRITICAL: Missing SUPABASE_URL or SUPABASE_KEY in your .env file!")
     
-    os.makedirs(DOCS_DIR, exist_ok=True)
-    os.makedirs(DB_DIR, exist_ok=True)
+    if not supabase_client:
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     if embeddings is None:
         print("Connecting to Google Gemini Embedding API...")
         gemini_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_key:
-            raise ValueError("GEMINI_API_KEY not set in environment variables")
-            
         embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
             google_api_key=gemini_key
         )
 
-    # if reranker is None:
-    #     print("Loading reranker model (CrossEncoder)...")
-    #     reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
-
-    vectorstore = Chroma(
-        persist_directory=DB_DIR,
-        embedding_function=embeddings,
-        collection_name="docquery"
+    vectorstore = SupabaseVectorStore(
+        client=supabase_client,
+        embedding=embeddings,
+        table_name="documents",
+        query_name="match_documents"
     )
+    print("Connected to Supabase Vector Store.")
 
-    existing_ids = vectorstore.get()["ids"]
-    if len(existing_ids) > 0:
-        retriever = vectorstore.as_retriever(
-            search_type="mmr",
-            search_kwargs={"k": TOP_K, "fetch_k": FETCH_K}
-        )
-        print("Existing vector DB loaded.")
-
-def add_documents(file_paths):
-    """Processes ONLY the specific new files uploaded by the user."""
-    global vectorstore, retriever
+def add_documents(file_paths, user_id):
+    """Processes new files, tags them, and uploads vectors to Supabase."""
+    global vectorstore
     
-    if not file_paths:
-        return
+    if not file_paths: return
 
-    print(f"Incremental Indexing: Processing {len(file_paths)} new file(s)...")
+    print(f"Incremental Indexing: Processing {len(file_paths)} file(s) for user {user_id}...")
     new_docs = []
     
     for path in file_paths:
         abs_path = os.path.abspath(path)
         loader = PyPDFLoader(abs_path)
-        new_docs.extend(loader.load())
+        docs = loader.load()
+        
+        for doc in docs:
+            doc.metadata["user_id"] = user_id
+            doc.metadata["source_file"] = os.path.basename(path)
+        new_docs.extend(docs)
 
     if new_docs:
         splitter = RecursiveCharacterTextSplitter(
@@ -93,43 +86,15 @@ def add_documents(file_paths):
             batch = chunks[i:i+BATCH_SIZE]
             vectorstore.add_documents(batch)
         
-        print(f"Successfully added {len(chunks)} new chunks to the database.")
+        print(f"Successfully added {len(chunks)} new chunks to Supabase for user {user_id}.")
 
-    retriever = vectorstore.as_retriever(
-        search_type="mmr", 
-        search_kwargs={"k": TOP_K, "fetch_k": FETCH_K}
-    )
-
-def delete_document(source_path: str):
-    """Batch deletes chunks to bypass SQLite limits."""
-    global vectorstore, retriever
-
-    if vectorstore is None:
-        return
-
-    source_path = os.path.abspath(source_path)
-    results = vectorstore.get()
-    ids_to_delete = []
-
-    for i, meta in enumerate(results["metadatas"]):
-        stored = os.path.abspath(meta.get("source", ""))
-        if stored == source_path:
-            ids_to_delete.append(results["ids"][i])
-
-    if not ids_to_delete:
-        print(f"No chunks found for {source_path}")
-        return
-
-    for i in range(0, len(ids_to_delete), 500):
-        batch_ids = ids_to_delete[i:i+500]
-        vectorstore.delete(ids=batch_ids)
-        
-    print(f"Deleted {len(ids_to_delete)} chunks for {source_path}")
-
-    if len(vectorstore.get()["ids"]) == 0:
-        retriever = None
-    else:
-        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": TOP_K, "fetch_k": FETCH_K})
-
-if __name__ == "__main__":
-    init_rag()
+def delete_document(filename: str, user_id: str):
+    """Directly deletes a document's chunks from Supabase using SQL filters."""
+    global supabase_client
+    if supabase_client is None: return
+    
+    try:
+        supabase_client.table("documents").delete().eq("metadata->>source_file", filename).eq("metadata->>user_id", user_id).execute()
+        print(f"Successfully deleted vectors for {filename}")
+    except Exception as e:
+        print(f"Failed to delete vectors from Supabase: {e}")

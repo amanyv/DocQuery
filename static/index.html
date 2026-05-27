@@ -701,14 +701,21 @@
         smoothScrollToBottom(container, true);
       }
 
-      
-      const API = "https://docquery-5dai.onrender.com";
+      const API = "http://127.0.0.1:5000";
+      // const API = "https://docquery-5dai.onrender.com";
       const MAX_CHARS = 100;
       let pollInterval = null;
       let isLoading = false;
       let chatHistory = [];
       let rafId = null;
       let pendingUpdate = false;
+
+      let userId = localStorage.getItem("docquery_user_id");
+      if (!userId) {
+          userId = crypto.randomUUID(); 
+          localStorage.setItem("docquery_user_id", userId);
+      }
+      console.log("Active User ID:", userId);
 
       
       const input = document.getElementById("q");
@@ -738,11 +745,26 @@
       
       chat.addEventListener('scroll', debounce(updateScrollHint, 100));
       
-      loadFiles();
+      window.addEventListener('DOMContentLoaded', () => {
+        console.log("[DocQuery] Running window load session reset...");
+        fetch(API + "/api/reset", { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            console.log("[DocQuery] Backend database cleared successfully:", data);
+            loadFiles();
+          })
+          .catch(err => {
+            console.error("[DocQuery] Failed to trigger auto-reset endpoint:", err);
+            loadFiles();
+          });
+      });
 
       async function loadFiles() {
         try {
-          const res = await fetch(API + "/api/files");
+          const res = await fetch(API + "/api/files", {
+            headers: { "X-User-ID": userId }
+        });
+          
           const data = await res.json();
           renderFiles(data.files || []);
         } catch (e) {
@@ -822,6 +844,9 @@
           
           const res = await fetch(API + "/api/upload", {
             method: "POST",
+            headers: {
+              "X-User-ID": userId
+            },
             body: formData,
           });
           const data = await res.json();
@@ -865,7 +890,9 @@
         try {
           const res = await fetch(
             API + `/api/files/${encodeURIComponent(filename)}`,
-            { method: "DELETE" },
+            { method: "DELETE" ,
+            headers: { "X-User-ID": userId }
+          },
           );
           const data = await res.json();
           console.log("[delete] response:", data);
@@ -990,7 +1017,9 @@
           log("info", "Streaming started");
           const res = await fetch(API + "/api/ask", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json",
+              "X-User-ID": userId
+             },
             body: JSON.stringify({ question: q, history: chatHistory }),
           });
 
@@ -1091,7 +1120,7 @@
 
         try {
           console.log("[summarize] request sent");
-          const res = await fetch(API + "/api/summarize", { method: "POST" });
+          const res = await fetch(API + "/api/summarize", { method: "POST", headers: { "X-User-ID": userId } });
 
           if (!res.ok) {
             const err = await res.json();

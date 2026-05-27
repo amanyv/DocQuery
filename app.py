@@ -1,4 +1,6 @@
 import sys, os, threading, logging, json
+from dotenv import load_dotenv
+load_dotenv()
 from supabase import create_client
 from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
@@ -34,35 +36,51 @@ log.addFilter(NoStatusFilter())
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
-reload_status = {"indexing": False, "ready": False, "error": None}
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Docs")
 os.makedirs(DOCS_DIR, exist_ok=True)
 
+def set_indexing_status(is_indexing: bool, error_message: str = None):
+    if not supabase:
+        return
+    try:
+        supabase.table("system_status").upsert({
+            "id": 1, 
+            "is_indexing": is_indexing,
+            "error_message": error_message
+        }).execute()
+    except Exception as e:
+        logger.error(f"Failed to update status in DB: {e}")
+
+def get_indexing_status():
+    if not supabase:
+        return {"is_indexing": False, "error_message": None}
+    try:
+        response = supabase.table("system_status").select("*").eq("id", 1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        logger.error(f"Failed to read status from DB: {e}")
+    return {"is_indexing": False, "error_message": None}
+
 def load_rag():
     """Initialize RAG components once at startup."""
-    global reload_status
     try:
         logger.info("Initializing RAG module...")
         rag.init_rag()
-        reload_status["ready"] = (rag.retriever is not None)
         logger.info("RAG initialized successfully")
     except Exception:
         logger.error("RAG failed to initialize", exc_info=True)
 
-def _background_worker(uploaded_files_data):
+def _background_worker(uploaded_files_data, user_id):
     """
     10. Move Supabase upload fully to background so UI unblocks instantly.
     """
-    global reload_status
+    set_indexing_status(True)
 
     with reload_lock:
         try:
-            reload_status["indexing"] = True
-            reload_status["ready"] = False
-            reload_status["error"] = None
 
             file_paths = []
-            
             for file_data in uploaded_files_data:
                 path = file_data["path"]
                 filename = file_data["filename"]
@@ -70,37 +88,50 @@ def _background_worker(uploaded_files_data):
 
                 if supabase:
                     try:
+                        supabase_path = f"{user_id}/{filename}"
                         with open(path, "rb") as f:
                             supabase.storage.from_("DocQuery").upload(
                                 filename, f, {"content-type": "application/pdf", "upsert": "true"}
                             )
-                        logger.info(f"Uploaded to Supabase: {filename}")
+                        logger.info(f"Uploaded to SupabaseStorage: {supabase_path}")
                     except Exception as e:
                         logger.error(f"Supabase upload failed: {e}")
 
-            logger.info("Indexing new files into Vector DB...")
-            rag.add_documents(file_paths)
+            logger.info("Indexing new files into Vector DBfor user {user_id}...")
+            rag.add_documents(file_paths, user_id)
             
-            reload_status["ready"] = (rag.retriever is not None)
             logger.info("Background indexing complete.")
+            set_indexing_status(False)
 
         except Exception as e:
             logger.exception("BACKGROUND WORKER FAILED")
-            reload_status["error"] = str(e)
-        finally:
-            reload_status["indexing"] = False
+            set_indexing_status(False, error_message=str(e))
 
 OVERVIEW_KEYWORDS = {"about", "overview", "summary", "summarize", "describe", "explain this", "tell me about", "what does it cover"}
 
-def get_docs_for_question(query: str):
-    logger.info("RETRIEVAL | query=%s", query)
+def get_docs_for_question(query: str, user_id: str):
+    logger.info("RETRIEVAL | query=%s | user=%s", query, user_id)
     q_lower = query.lower()
     is_overview = any(kw in q_lower for kw in OVERVIEW_KEYWORDS)
 
-    if is_overview and rag.vectorstore is not None:
-        initial_docs = rag.vectorstore.similarity_search("introduction overview summary purpose topics covered", k=8)
-    else:
-        initial_docs = rag.retriever.invoke(query)[:8]
+    search_query = "introduction overview summary purpose topics covered" if is_overview else query
+
+    query_embedding = rag.embeddings.embed_query(search_query)
+
+    response = rag.supabase_client.rpc(
+        "match_documents",
+        {
+            "query_embedding": query_embedding,
+            "match_count": 8,
+            "filter": {"user_id": user_id}
+        }
+    ).execute()
+
+    from langchain_core.documents import Document
+    initial_docs = [
+        Document(page_content=row["content"], metadata=row["metadata"]) 
+        for row in response.data
+    ]
 
     if hasattr(rag, "reranker") and rag.reranker is not None:
         pairs = [[query, doc.page_content] for doc in initial_docs]
@@ -155,22 +186,34 @@ def index():
 
 @app.route("/api/status")
 def status():
-    ready = rag.retriever is not None
-    indexing = reload_status["indexing"]
-    error = reload_status["error"]
+    db_status = get_indexing_status()
+    indexing = db_status.get("is_indexing", False)
+    error = db_status.get("error_message")
+    
+    ready = True if rag.vectorstore is not None else False
     msg = f"Indexing failed: {error}" if error else "Indexing PDF..." if indexing else "Pipeline ready." if ready else "Waiting..."
+    
     return jsonify({"ready": ready, "indexing": indexing, "error": error, "message": msg})
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
-    if reload_status["indexing"]:
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "Unauthorized: No User ID provided."}), 401
+        
+    db_status = get_indexing_status()
+    if db_status.get("is_indexing"):
         return jsonify({"error": "Already indexing, please wait."}), 429
+        
     if "files" not in request.files:
         return jsonify({"error": "No files provided."}), 400
 
     files = request.files.getlist("files")
     if not files:
         return jsonify({"error": "No files selected."}), 400
+
+    user_dir = os.path.join(DOCS_DIR, user_id)
+    os.makedirs(user_dir, exist_ok=True)
 
     uploaded = []
     uploaded_files_data = []
@@ -180,7 +223,7 @@ def upload():
             continue
         
         filename = secure_filename(file.filename)
-        save_path = os.path.join(DOCS_DIR, filename)
+        save_path = os.path.join(user_dir, filename)
 
         if os.path.exists(save_path) and rag.vectorstore:
             rag.delete_document(save_path)
@@ -193,45 +236,77 @@ def upload():
     if not uploaded:
         return jsonify({"error": "No valid PDF files found."}), 400
 
-    threading.Thread(target=_background_worker, args=(uploaded_files_data,), daemon=True).start()
-
+    threading.Thread(target=_background_worker, args=(uploaded_files_data, user_id), daemon=True).start()
     return jsonify({"message": "Files uploaded. Indexing in background.", "files": uploaded, "indexing": True})
+
+@app.route('/api/reset', methods=['POST'])
+def reset_session():
+    try:
+        set_indexing_status(False, None)
+        return jsonify({"status": "success", "message": "Environment reset successfully"}), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/files", methods=["GET"])
 def list_files():
-    files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".pdf")]
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"files": []})
+        
+    user_dir = os.path.join(DOCS_DIR, user_id)
+    if not os.path.exists(user_dir):
+        return jsonify({"files": []})
+    
+    files = [f for f in os.listdir(user_dir) if f.endswith(".pdf")]
     return jsonify({"files": files})
 
 @app.route("/api/files/<filename>", methods=["DELETE"])
 def delete_file(filename):
-    path = os.path.join(DOCS_DIR, filename)
-    if not os.path.exists(path):
-        return jsonify({"error": "File not found."}), 404
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "Unauthorized."}), 401
+    
+    try:
+        supabase_path = f"{user_id}/{filename}"
+        supabase.storage.from_("DocQuery").remove([supabase_path])
+    except Exception as e:
+        logger.error(f"Failed to remove from storage: {e}")
 
     if rag.vectorstore is not None:
-        rag.delete_document(path)
-    
-    os.remove(path)
-    reload_status["ready"] = (rag.retriever is not None)
+        rag.delete_document(filename, user_id)
+        
+    path = os.path.join(DOCS_DIR, user_id, filename)
+    if os.path.exists(path):
+        os.remove(path)
+
     return jsonify({"message": f"Deleted {filename}"})
 
 @app.route("/api/ask", methods=["POST"])
 def ask():
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "Unauthorized."}), 401
+    
     data = request.get_json(silent=True) or {}
     question = data.get("question", "").strip()
 
     if not question:
         return jsonify({"error": "Question is required."}), 400
-    if rag.retriever is None:
+    
+    if rag.vectorstore is None:
         return jsonify({"error": "No documents available. Upload a PDF."}), 400
 
     try:
         history = data.get("history", [])
         
         query = build_contextual_query(question, history)
-        logger.info(f"Query: {query}")
 
-        docs = get_docs_for_question(query)
+        docs = get_docs_for_question(query, user_id)
+
+        if not docs:
+            return jsonify({"error": "No documents available. Upload a PDF."}), 400
+        
         context, sources = build_context(docs)
 
         prompt = f"""
@@ -283,19 +358,34 @@ Answer:
     
 @app.route("/api/summarize", methods=["POST"])
 def summarize_all():
-    if rag.retriever is None:
-        return jsonify({"error": "No PDFs uploaded yet. Please upload a PDF first."}), 400
-    if reload_status["indexing"]:
-        return jsonify({"error": "Still indexing. Please wait a moment."}), 503
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "Unauthorized."}), 401
+
+    if rag.vectorstore is None:
+        return jsonify({"error": "System loading."}), 400
 
     try:
-        docs = rag.vectorstore.max_marginal_relevance_search(
-            "introduction overview abstract summary purpose conclusions", 
-            k=16,
-            fetch_k=60
-        )
+        query_embedding = rag.embeddings.embed_query("introduction overview abstract summary purpose conclusions")
+        response = rag.supabase_client.rpc(
+            "match_documents",
+            {
+                "query_embedding": query_embedding,
+                "match_count": 16,
+                "filter": {"user_id": user_id}
+            }
+        ).execute()
+        
+        from langchain_core.documents import Document
+        docs = [
+            Document(page_content=row["content"], metadata=row["metadata"]) 
+            for row in response.data
+        ]
+        
+        if not docs:
+            return jsonify({"error": "No PDFs uploaded yet. Please upload a PDF first."}), 400
+        
         context, _ = build_context(docs)
-        logger.info(f"Summarize triggered with {len(docs)} chunks")
 
         prompt = f"""Summarize the provided documents in a few short paragraphs. 
 Make sure to cover the main purpose and key topics of ALL the different documents provided below. Be concise but comprehensive.
@@ -338,7 +428,6 @@ Summary:"""
 def health():
     return jsonify({
         "status": "healthy",
-        "ready": rag.retriever is not None
     })
 
 load_rag()

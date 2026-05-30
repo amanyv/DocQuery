@@ -2,6 +2,7 @@ import os, threading, logging, json
 from flask import Blueprint, request, jsonify, send_from_directory, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from supabase import create_client
+from flask import redirect
 
 import main as rag 
 
@@ -154,12 +155,19 @@ def list_files():
 @api.route("/api/files/<filename>", methods=["GET"])
 def get_file(filename):
     user_id = request.args.get("user") or request.headers.get("X-User-ID")
-    
     if not user_id: 
         return jsonify({"error": "Unauthorized."}), 401
         
-    user_dir = os.path.join(DOCS_DIR, user_id)
-    return send_from_directory(user_dir, filename)
+    try:
+        res = supabase.storage.from_("DocQuery").create_signed_url(f"{user_id}/{filename}", 60)
+        signed_url = res.get("signedURL")
+        if not signed_url:
+            return jsonify({"error": "File not found in storage."}), 404
+        
+        return redirect(signed_url)
+    except Exception as e:
+        logger.error(f"Error fetching PDF from Supabase: {e}")
+        return jsonify({"error": "Failed to load PDF."}), 500
 
 @api.route("/api/files/<filename>", methods=["DELETE"])
 def delete_file(filename):
@@ -181,6 +189,14 @@ def ask():
 
     if not user_id: return jsonify({"error": "Unauthorized."}), 401
     if not question: return jsonify({"error": "Question required."}), 400
+
+    db_status = get_indexing_status()
+    if db_status and db_status.get("error_message"):
+        err = db_status.get("error_message")
+        if "429" in err or "quota" in err.lower() or "ResourceExhausted" in err:
+            return jsonify({"error": "⚠️ **API Quota Reached:** You have exceeded your free daily Gemini embedding requests. Please try again tomorrow or switch to local embeddings."}), 429
+        return jsonify({"error": f"⚠️ **Indexing Failed:** {err}"}), 400
+    
     if rag.vectorstore is None: return jsonify({"error": "System loading."}), 400
 
     try:
@@ -246,6 +262,14 @@ Answer:"""
 def summarize_all():
     user_id = request.headers.get("X-User-ID")
     if not user_id: return jsonify({"error": "Unauthorized."}), 401
+
+    db_status = get_indexing_status()
+    if db_status and db_status.get("error_message"):
+        err = db_status.get("error_message")
+        if "429" in err or "quota" in err.lower() or "ResourceExhausted" in err:
+            return jsonify({"error": "⚠️ **API Quota Reached:** You have exceeded your free daily Gemini embedding requests. Please try again tomorrow or switch to local embeddings."}), 429
+        return jsonify({"error": f"⚠️ **Indexing Failed:** {err}"}), 400
+    
     if rag.vectorstore is None: return jsonify({"error": "System loading."}), 400
 
     try:

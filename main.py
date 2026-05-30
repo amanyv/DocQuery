@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import SupabaseVectorStore
 from supabase.client import Client, create_client
 
@@ -41,10 +41,11 @@ def init_rag():
         supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     if embeddings is None:
-        print("Initializing Local HuggingFace Embeddings...")
+        print("Connecting to Google Gemini Embedding API...")
         gemini_key = os.getenv("GEMINI_API_KEY")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/gemini-embedding-001",
+            google_api_key=gemini_key
         )
 
     vectorstore = SupabaseVectorStore(

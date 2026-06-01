@@ -1,6 +1,7 @@
 import os
 import random
 import time
+import math
 from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.document_loaders import PyPDFLoader
@@ -110,10 +111,21 @@ def add_documents(file_paths, user_id):
 
         for i in range(0, len(chunks), BATCH_SIZE):
             batch = chunks[i:i+BATCH_SIZE]
-            vectorstore.add_documents(batch)
+            success = False
+            while not success:
+                try:
+                    vectorstore.add_documents(batch)
+                    print(f"Uploaded batch {i//BATCH_SIZE + 1} of {math.ceil(len(chunks)/BATCH_SIZE)}...")
+                    time.sleep(2)
+                    success = True
+                except Exception as e:
+                    error_msg = str(e)
 
-            print(f"Uploaded batch {i//BATCH_SIZE + 1}... pausing to respect API limits.")
-            time.sleep(2)
+                    if "429" in error_msg or "Quota" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                        print("⚠️ Google API Free Tier limit reached! Pausing for 60 seconds before retrying...")
+                        time.sleep(60)
+                    else:
+                        raise e
         
         print(f"Successfully added {len(chunks)} new chunks to Supabase for user {user_id}.")
 

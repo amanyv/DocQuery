@@ -127,7 +127,7 @@ def reset_session():
     try:
         set_indexing_status(False, None)
         if supabase:
-            supabase.table("documents").delete().eq("metadata->>user_id", user_id).execute()
+            supabase.table(rag.TABLE_NAME).delete().eq("metadata->>user_id", user_id).execute()
             try:
                 files_res = supabase.storage.from_("DocQuery").list(user_id)
                 if files_res:
@@ -204,7 +204,7 @@ def ask():
         query = build_contextual_query(question, history)
         
         query_embedding = rag.embeddings.embed_query(query)
-        response = rag.supabase_client.rpc("match_documents", {
+        response = rag.supabase_client.rpc(rag.RPC_NAME, {
             "query_embedding": query_embedding, "match_count": 8, "filter": {"user_id": user_id}
         }).execute()
 
@@ -239,6 +239,7 @@ Answer:"""
                     "1. Use \\( and \\) for inline math (e.g., \\( x \\) or \\( Q, K, V \\)). NEVER use the $ symbol.\n"
                     "2. Use \\[ and \\] for standalone block equations. You MUST place empty blank lines before and after block equations. NEVER use $$.\n"
                     "3. Ensure pristine LaTeX syntax."
+                    "4. If you see PDF extraction artifacts attached to emails or phone numbers (like the word 'envel~pe'), remove them and only output the clean email address."
                 )
             }
         ]
@@ -274,7 +275,7 @@ def summarize_all():
 
     try:
         query_embedding = rag.embeddings.embed_query("introduction overview abstract summary purpose")
-        response = rag.supabase_client.rpc("match_documents", {
+        response = rag.supabase_client.rpc(rag.RPC_NAME, {
             "query_embedding": query_embedding, "match_count": 16, "filter": {"user_id": user_id}
         }).execute()
         
@@ -292,6 +293,7 @@ def summarize_all():
                     "CLEAN TEXT RULES:\n"
                     "1. SCRUB ACADEMIC CITATIONS: Do NOT include original academic reference numbers, brackets, or bibliography citations (e.g., remove [25], [26], etc.) from your final text.\n"
                     "2. Do not include raw source tags like [Source 14, 0] in the summary output. Keep the paragraphs clean and readable.\n\n"
+                    "3. SCRUB ARTIFACTS: If you see PDF extraction artifacts attached to emails or phone numbers (like the word 'envel~pe'), remove them completely.\n\n"
                     "SECONDARY DIRECTIVE (MATH FORMATTING):\n"
                     "1. Use \\( and \\) for inline math and sequences (e.g., \\( x \\)). NEVER use the $ symbol.\n"
                     "2. Use \\[ and \\] for standalone block equations. You MUST place empty blank lines before and after block equations. NEVER use $$.\n"

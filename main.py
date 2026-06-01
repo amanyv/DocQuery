@@ -64,7 +64,7 @@ def init_rag():
             print(f"🔑 Selected a Google API Key from a pool of {len(valid_keys)} keys.")
             
             embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/embedding-001",
+                model="models/text-embedding-004",
                 google_api_key=selected_key
             )
             

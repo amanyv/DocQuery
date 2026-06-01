@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.document_loaders import PyPDFLoader
@@ -13,7 +14,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),
 TOP_K = 8
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
-BATCH_SIZE = 100
+BATCH_SIZE = 25
 
 api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
@@ -110,6 +111,9 @@ def add_documents(file_paths, user_id):
         for i in range(0, len(chunks), BATCH_SIZE):
             batch = chunks[i:i+BATCH_SIZE]
             vectorstore.add_documents(batch)
+
+            print(f"Uploaded batch {i//BATCH_SIZE + 1}... pausing to respect API limits.")
+            time.sleep(2)
         
         print(f"Successfully added {len(chunks)} new chunks to Supabase for user {user_id}.")
 

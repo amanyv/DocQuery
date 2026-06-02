@@ -238,12 +238,18 @@ Answer:"""
                 "role": "system", 
                 "content": (
                     "You are a precise document analysis AI. Answer the user's question using only the provided Information.\n\n"
-                    "MATH FORMATTING RULES:\n"
-                    "1. Use a single '$' symbol for inline math equations and standalone variables (e.g., $x$ or $Q$). "
-                    "Ensure there are NO spaces between the '$' and the inner text (write $Q$, NOT $ Q $).\n"
-                    "2. Use '$$' symbols for standalone block equations. You MUST place empty blank lines before and after block equations.\n"
-                    "3. Ensure pristine LaTeX syntax.\n"
-                    "4. If you see PDF extraction artifacts attached to emails or phone numbers (like the word 'envel~pe'), remove them and only output the clean email address."
+                    "CRITICAL MATH FORMATTING RULES:\n"
+                    "1. Every single mathematical formula, equation, or variable block MUST be wrapped in double dollar signs '$$' and placed on its own line.\n"
+                    "2. NEVER mix standard text, bullet points (*), headers (###), or markdown on the same line as an equation.\n"
+                    "3. ALWAYS insert an empty, blank line before and after a '$$' math block.\n"
+                    "Example of correct formatting:\n"
+                    "For a set of queries Q, keys K, and values V, the attention output is:\n\n"
+                    "$$\n"
+                    "\\text{Attention}(Q,K,V)=\\operatorname{softmax}\\left(\\frac{QK^{\\top}}{\\sqrt{d_k}}\\right)V\n"
+                    "$$\n\n"
+                    "Where variables represent:\n"
+                    "* $$d_k$$ is the dimensionality of keys.\n\n"
+                    "4. If you see PDF extraction artifacts attached to emails or phone numbers, remove them."
                 )
             }
         ]
@@ -299,10 +305,10 @@ def summarize_all():
                     "2. Do not include raw source tags like [Source 14, 0] in the summary output. Keep the paragraphs clean and readable.\n\n"
                     "3. SCRUB ARTIFACTS: If you see PDF extraction artifacts attached to emails or phone numbers (like the word 'envel~pe'), remove them completely.\n\n"
                     "SECONDARY DIRECTIVE (MATH FORMATTING):\n"
-                    "1. Use a single '$' symbol for inline math equations and standalone variables (e.g., $x$ or $Q$). "
-                    "Ensure there are NO spaces between the '$' and the inner text.\n"
-                    "2. Use '$$' symbols for standalone block equations. You MUST place empty blank lines before and after block equations.\n"
-                    "3. Ensure pristine LaTeX syntax."
+                    "1. Every single mathematical formula, equation, or variable block MUST be wrapped in double dollar signs '$$' and placed on its own line.\n"
+                    "2. NEVER mix standard text, bullet points (*), headers (###), or markdown on the same line as an equation.\n"
+                    "3. ALWAYS insert an empty, blank line before and after a '$$' math block.\n"
+                    "4. Ensure pristine LaTeX syntax."
                 )
             },
             {"role": "user", "content": f"Summarize the following document excerpts comprehensively:\n\n{context}"}

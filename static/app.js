@@ -324,7 +324,8 @@ function scheduleRender(element, rawText, container) {
   if (!pendingUpdate) {
     pendingUpdate = true;
     rafId = requestAnimationFrame(() => {
-      element.innerHTML = DOMPurify.sanitize(marked.parse(rawText));
+    const cleanText = processLatexEscapes(rawText);
+      element.innerHTML = DOMPurify.sanitize(marked.parse(cleanText));
       smoothScrollToBottom(container);
       pendingUpdate = false;
     });
@@ -332,9 +333,10 @@ function scheduleRender(element, rawText, container) {
 }
 
 function processLatexEscapes(text) {
+  if (!text) return "";
   return text
-    .replace(/\\\[/g, "$$")
-    .replace(/\\\]/g, "$$")
+    .replace(/\\\[/g, "\n$$\n")
+    .replace(/\\\]/g, "\n$$\n")
     .replace(/\\\(/g, "$")
     .replace(/\\\)/g, "$");
 }
@@ -445,7 +447,7 @@ async function send() {
   }
 
   aDiv.classList.remove("streaming-cursor");
-  aDiv.innerHTML = DOMPurify.sanitize(marked.parse(rawText || "No response received."));
+  aDiv.innerHTML = DOMPurify.sanitize(marked.parse(processLatexEscapes(rawText) || "No response received."));
 
   if (sources.length > 0) {
     const row = document.createElement("div");
@@ -531,7 +533,7 @@ async function runSummarize() {
   }
 
   botDiv.classList.remove("streaming-cursor");
-  botDiv.innerHTML = DOMPurify.sanitize(marked.parse(rawText || "No summary available."));
+  botDiv.innerHTML = DOMPurify.sanitize(marked.parse(processLatexEscapes(rawText) || "No summary available."));
 
   smoothScrollToBottom(chat, true);
   setLoading(false);

@@ -65,11 +65,13 @@ function showError(message, container) {
   smoothScrollToBottom(container, true);
 }
 
-
+const API = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://127.0.0.1:5000"
+  : window.location.origin;
 // const API = "http://127.0.0.1:5000";
-const API = "https://docquery-5dai.onrender.com";
+// const API = "https://docquery-5dai.onrender.com";
 
-const MAX_CHARS = 100;
+const MAX_CHARS = 500;
 let pollInterval = null;
 let isLoading = false;
 let chatHistory = [];
@@ -287,7 +289,7 @@ function startPolling() {
   
   pollInterval = setInterval(async () => {
     try {
-      const res = await fetch(API + "/api/status");
+      const res = await fetch(API + `/api/status?user=${userId}`);
       const data = await res.json();
 
       console.log("[polling] status:", data);
@@ -322,7 +324,7 @@ function scheduleRender(element, rawText, container) {
   if (!pendingUpdate) {
     pendingUpdate = true;
     rafId = requestAnimationFrame(() => {
-      element.innerHTML = marked.parse(rawText);
+      element.innerHTML = DOMPurify.sanitize(marked.parse(rawText));
       smoothScrollToBottom(container);
       pendingUpdate = false;
     });
@@ -389,7 +391,7 @@ async function send() {
     if (!res.ok) {
       const err = await res.json();
       aDiv.classList.remove("streaming-cursor");
-      aDiv.innerHTML = marked.parse(err.error || "Something went wrong.");
+      aDiv.innerHTML = DOMPurify.sanitize(marked.parse(err.error || "Something went wrong."));
       setLoading(false);
       return;
     }
@@ -416,14 +418,13 @@ async function send() {
           if (json.error) {
             console.warn("[ask] stream error:", json.error);
             aDiv.classList.remove("streaming-cursor");
-            aDiv.innerHTML = marked.parse(json.error);
+            aDiv.innerHTML = DOMPurify.sanitize(marked.parse(json.error));
           } else if (json.sources) {
             console.log("[ask] sources:", json.sources);
             sources = json.sources;
           } else if (json.token) {
             log("debug", "Token", json.token);
             rawText += json.token;
-            rawText = processLatexEscapes(rawText);
 
             scheduleRender(aDiv, rawText, chat);
           }
@@ -440,12 +441,11 @@ async function send() {
   } catch (e) {
     log("error", "Network error", e);
     aDiv.classList.remove("streaming-cursor");
-    aDiv.innerHTML = marked.parse("❌ Network error. Please try again.");
+    aDiv.innerHTML = DOMPurify.sanitize(marked.parse("❌ Network error. Please try again."));
   }
 
   aDiv.classList.remove("streaming-cursor");
-  rawText = processLatexEscapes(rawText);
-  aDiv.innerHTML = marked.parse(rawText || "No response received.");
+  aDiv.innerHTML = DOMPurify.sanitize(marked.parse(rawText || "No response received."));
 
   if (sources.length > 0) {
     const row = document.createElement("div");
@@ -490,9 +490,7 @@ async function runSummarize() {
     if (!res.ok) {
       const err = await res.json();
       botDiv.classList.remove("streaming-cursor");
-      botDiv.innerHTML = marked.parse(
-        err.error || "Something went wrong.",
-      );
+      botDiv.innerHTML = DOMPurify.sanitize(marked.parse(err.error || "Something went wrong."));
       setLoading(false);
       return;
     }
@@ -518,24 +516,22 @@ async function runSummarize() {
           const json = JSON.parse(payload);
           if (json.token) {
             rawText += json.token;
-            rawText = processLatexEscapes(rawText);
             
             scheduleRender(botDiv, rawText, chat);
           } else if (json.error) {
             console.warn("[summarize] stream error:", json.error);
-            botDiv.innerHTML = marked.parse(json.error);
+            botDiv.innerHTML = DOMPurify.sanitize(marked.parse(json.error));
           }
         } catch (_) {}
       }
     }
   } catch (e) {
     console.error("[summarize] network error:", e);
-    botDiv.innerHTML = marked.parse("❌ Network error. Please try again.");
+    botDiv.innerHTML = DOMPurify.sanitize(marked.parse("❌ Network error. Please try again."));
   }
 
   botDiv.classList.remove("streaming-cursor");
-  rawText = processLatexEscapes(rawText);
-  botDiv.innerHTML = marked.parse(rawText || "No summary available.");
+  botDiv.innerHTML = DOMPurify.sanitize(marked.parse(rawText || "No summary available."));
 
   smoothScrollToBottom(chat, true);
   setLoading(false);

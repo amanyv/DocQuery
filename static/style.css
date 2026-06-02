@@ -190,6 +190,7 @@ body {
   flex-direction: column;
   height: 100%;
   min-width: 0;
+  position: relative;
 }
 
 .pdf-pane {

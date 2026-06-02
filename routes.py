@@ -16,26 +16,26 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL else None
 
-def set_indexing_status(is_indexing: bool, error_message: str = None):
+def set_indexing_status(user_id: str, is_indexing: bool, error_message: str = None):
     if not supabase: return
     try:
         supabase.table("system_status").upsert({
-            "id": 1, "is_indexing": is_indexing, "error_message": error_message
+            "id": user_id, "is_indexing": is_indexing, "error_message": error_message
         }).execute()
     except Exception as e:
         logger.error(f"Failed to update status in DB: {e}")
 
-def get_indexing_status():
+def get_indexing_status(user_id: str):
     if not supabase: return {"is_indexing": False, "error_message": None}
     try:
-        response = supabase.table("system_status").select("*").eq("id", 1).execute()
+        response = supabase.table("system_status").select("*").eq("id", user_id).execute()
         if response.data: return response.data[0]
     except Exception as e:
         logger.error(f"Failed to read status from DB: {e}")
     return {"is_indexing": False, "error_message": None}
 
 def _background_worker(uploaded_files_data, user_id):
-    set_indexing_status(True)
+    set_indexing_status(user_id, True)
     try:
         file_paths = []
         for file_data in uploaded_files_data:
@@ -54,10 +54,10 @@ def _background_worker(uploaded_files_data, user_id):
 
         logger.info(f"Indexing new files for user {user_id}...")
         rag.add_documents(file_paths, user_id)
-        set_indexing_status(False)
+        set_indexing_status(user_id, False)
     except Exception as e:
         logger.exception("BACKGROUND WORKER FAILED")
-        set_indexing_status(False, error_message=str(e))
+        set_indexing_status(user_id, False, error_message=str(e))
 
 def build_context(docs):
     parts = []
@@ -88,7 +88,10 @@ def index():
 
 @api.route("/api/status")
 def status():
-    db_status = get_indexing_status()
+    user_id = request.headers.get("X-User-ID") or request.args.get("user")
+    if not user_id: return jsonify({"ready": False, "indexing": False, "message": "Missing User ID"})
+    
+    db_status = get_indexing_status(user_id)
     indexing = db_status.get("is_indexing", False)
     error = db_status.get("error_message")
     ready = True if rag.vectorstore is not None else False
@@ -99,7 +102,7 @@ def status():
 def upload():
     user_id = request.headers.get("X-User-ID")
     if not user_id: return jsonify({"error": "Unauthorized"}), 401
-    if get_indexing_status().get("is_indexing"): return jsonify({"error": "Already indexing."}), 429
+    if get_indexing_status(user_id).get("is_indexing"): return jsonify({"error": "Already indexing."}), 429
     
     files = request.files.getlist("files")
     if not files: return jsonify({"error": "No files selected."}), 400
@@ -125,7 +128,7 @@ def reset_session():
     user_id = request.headers.get("X-User-ID")
     if not user_id: return jsonify({"error": "Unauthorized."}), 401
     try:
-        set_indexing_status(False, None)
+        set_indexing_status(user_id, False, None)
         if supabase:
             supabase.table(rag.TABLE_NAME).delete().eq("metadata->>user_id", user_id).execute()
             try:
@@ -190,7 +193,7 @@ def ask():
     if not user_id: return jsonify({"error": "Unauthorized."}), 401
     if not question: return jsonify({"error": "Question required."}), 400
 
-    db_status = get_indexing_status()
+    db_status = get_indexing_status(user_id)
     if db_status and db_status.get("error_message"):
         err = db_status.get("error_message")
         if "429" in err or "quota" in err.lower() or "ResourceExhausted" in err:
@@ -220,7 +223,7 @@ Guidelines:
 1. Fact Retrieval: Rely STRICTLY on the Information provided.
 2. Citations: YOU MUST CITE YOUR SOURCES. Append the exact source tag at the end of the sentence (e.g., [Source 1, p.4 - doc.pdf]).
 3. Refusal: If the provided Information is completely blank or unrelated, state: "I cannot answer this based on the provided documents."
-4. Math Formatting: Use \\( and \\) for inline equations, and \\[ and \\] for block equations. NEVER use $ signs.
+4. Math Formatting: Follow the strict system rules using '$' and '$$' delimiters.
 
 Information:
 {context}
@@ -234,11 +237,12 @@ Answer:"""
             {
                 "role": "system", 
                 "content": (
-                    "You are a precise document analysis AI. Answer the user's question using only the provided Information. "
+                    "You are a precise document analysis AI. Answer the user's question using only the provided Information.\n\n"
                     "MATH FORMATTING RULES:\n"
-                    "1. Use \\( and \\) for inline math (e.g., \\( x \\) or \\( Q, K, V \\)). NEVER use the $ symbol.\n"
-                    "2. Use \\[ and \\] for standalone block equations. You MUST place empty blank lines before and after block equations. NEVER use $$.\n"
-                    "3. Ensure pristine LaTeX syntax."
+                    "1. Use a single '$' symbol for inline math equations and standalone variables (e.g., $x$ or $Q$). "
+                    "Ensure there are NO spaces between the '$' and the inner text (write $Q$, NOT $ Q $).\n"
+                    "2. Use '$$' symbols for standalone block equations. You MUST place empty blank lines before and after block equations.\n"
+                    "3. Ensure pristine LaTeX syntax.\n"
                     "4. If you see PDF extraction artifacts attached to emails or phone numbers (like the word 'envel~pe'), remove them and only output the clean email address."
                 )
             }
@@ -264,7 +268,7 @@ def summarize_all():
     user_id = request.headers.get("X-User-ID")
     if not user_id: return jsonify({"error": "Unauthorized."}), 401
 
-    db_status = get_indexing_status()
+    db_status = get_indexing_status(user_id)
     if db_status and db_status.get("error_message"):
         err = db_status.get("error_message")
         if "429" in err or "quota" in err.lower() or "ResourceExhausted" in err:
@@ -295,8 +299,9 @@ def summarize_all():
                     "2. Do not include raw source tags like [Source 14, 0] in the summary output. Keep the paragraphs clean and readable.\n\n"
                     "3. SCRUB ARTIFACTS: If you see PDF extraction artifacts attached to emails or phone numbers (like the word 'envel~pe'), remove them completely.\n\n"
                     "SECONDARY DIRECTIVE (MATH FORMATTING):\n"
-                    "1. Use \\( and \\) for inline math and sequences (e.g., \\( x \\)). NEVER use the $ symbol.\n"
-                    "2. Use \\[ and \\] for standalone block equations. You MUST place empty blank lines before and after block equations. NEVER use $$.\n"
+                    "1. Use a single '$' symbol for inline math equations and standalone variables (e.g., $x$ or $Q$). "
+                    "Ensure there are NO spaces between the '$' and the inner text.\n"
+                    "2. Use '$$' symbols for standalone block equations. You MUST place empty blank lines before and after block equations.\n"
                     "3. Ensure pristine LaTeX syntax."
                 )
             },

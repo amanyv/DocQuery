@@ -337,6 +337,7 @@ function processLatexEscapes(text) {
     .replace(/\\\]/g, "\n$$\n")
     .replace(/\\\(/g, " $ ")
     .replace(/\\\)/g, " $ ")
+    .replace(/\$\$\s*[\*\s\$]*/g, "\n$$\n")
     .replace(/\\([QKVLWBX])\b/g, "$1")
     .replace(/\\times\b/g, "×");
 }

@@ -68,8 +68,6 @@ function showError(message, container) {
 const API = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
   ? "http://127.0.0.1:5000"
   : window.location.origin;
-// const API = "http://127.0.0.1:5000";
-// const API = "https://docquery-5dai.onrender.com";
 
 const MAX_CHARS = 500;
 let pollInterval = null;
@@ -324,7 +322,7 @@ function scheduleRender(element, rawText, container) {
   if (!pendingUpdate) {
     pendingUpdate = true;
     rafId = requestAnimationFrame(() => {
-    const cleanText = processLatexEscapes(rawText);
+      const cleanText = processLatexEscapes(rawText);
       element.innerHTML = DOMPurify.sanitize(marked.parse(cleanText));
       smoothScrollToBottom(container);
       pendingUpdate = false;
@@ -338,7 +336,9 @@ function processLatexEscapes(text) {
     .replace(/\\\[/g, "\n$$\n")
     .replace(/\\\]/g, "\n$$\n")
     .replace(/\\\(/g, "$")
-    .replace(/\\\)/g, "$");
+    .replace(/\\\)/g, "$")
+    .replace(/\\([QKVLWBX])\b/g, "$1") 
+    .replace(/\\times\b/g, "×");
 }
 
 async function send() {
@@ -393,7 +393,7 @@ async function send() {
     if (!res.ok) {
       const err = await res.json();
       aDiv.classList.remove("streaming-cursor");
-      aDiv.innerHTML = DOMPurify.sanitize(marked.parse(err.error || "Something went wrong."));
+      aDiv.innerHTML = DOMPurify.sanitize(marked.parse(processLatexEscapes(err.error || "Something went wrong.")));
       setLoading(false);
       return;
     }
@@ -420,7 +420,7 @@ async function send() {
           if (json.error) {
             console.warn("[ask] stream error:", json.error);
             aDiv.classList.remove("streaming-cursor");
-            aDiv.innerHTML = DOMPurify.sanitize(marked.parse(json.error));
+            aDiv.innerHTML = DOMPurify.sanitize(marked.parse(processLatexEscapes(json.error)));
           } else if (json.sources) {
             console.log("[ask] sources:", json.sources);
             sources = json.sources;
@@ -492,7 +492,7 @@ async function runSummarize() {
     if (!res.ok) {
       const err = await res.json();
       botDiv.classList.remove("streaming-cursor");
-      botDiv.innerHTML = DOMPurify.sanitize(marked.parse(err.error || "Something went wrong."));
+      botDiv.innerHTML = DOMPurify.sanitize(marked.parse(processLatexEscapes(err.error || "Something went wrong.")));
       setLoading(false);
       return;
     }
@@ -522,7 +522,7 @@ async function runSummarize() {
             scheduleRender(botDiv, rawText, chat);
           } else if (json.error) {
             console.warn("[summarize] stream error:", json.error);
-            botDiv.innerHTML = DOMPurify.sanitize(marked.parse(json.error));
+            botDiv.innerHTML = DOMPurify.sanitize(marked.parse(processLatexEscapes(json.error)));
           }
         } catch (_) {}
       }

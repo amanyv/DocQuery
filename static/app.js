@@ -18,27 +18,38 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
+let userScrolledUp = false;
+let lastScrollTop = 0;
+
 function smoothScrollToBottom(container, force = false) {
   if (!container) return;
-  
-  const isNearBottom = 
-    container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-  
-  if (isNearBottom || force) {
+
+  if (force) {
+    userScrolledUp = false;
     container.scrollTo({
       top: container.scrollHeight,
       behavior: 'smooth'
     });
+    return;
   }
+
+  if (userScrolledUp) return;
+  
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: 'auto'
+  });
 }
 
 function scrollToBottom() {
   const chat = document.getElementById("chat");
+  if (!chat) return;
+  
+  userScrolledUp = false;
   chat.scrollTo({
     top: chat.scrollHeight,
     behavior: 'smooth'
   });
-  updateScrollHint();
 }
 
 function updateScrollHint() {
@@ -47,13 +58,21 @@ function updateScrollHint() {
   
   if (!chat || !hint) return;
   
+  const currentScrollTop = chat.scrollTop;
+  const isScrollingUp = currentScrollTop < lastScrollTop;
+  lastScrollTop = currentScrollTop <= 0 ? 0 : currentScrollTop;
+
   const isAtBottom = 
-    chat.scrollHeight - chat.scrollTop - chat.clientHeight < 50;
+    chat.scrollHeight - chat.scrollTop - chat.clientHeight < 40;
   
   if (isAtBottom) {
     hint.classList.remove('visible');
+    userScrolledUp = false;
   } else {
     hint.classList.add('visible');
+    if (isLoading && isScrollingUp) {
+      userScrolledUp = true;
+    }
   }
 }
 
@@ -65,9 +84,8 @@ function showError(message, container) {
   smoothScrollToBottom(container, true);
 }
 
-
-// const API = "http://127.0.0.1:5000";
-const API = "https://docquery-5dai.onrender.com";
+const API = "http://127.0.0.1:5000";
+// const API = "https://docquery-5dai.onrender.com";
 
 const MAX_CHARS = 500;
 let pollInterval = null;
@@ -106,22 +124,25 @@ const updateCounter = debounce(() => {
 }, 100);
 
 input.addEventListener("input", updateCounter);
-chat.addEventListener('scroll', debounce(updateScrollHint, 100));
+chat.addEventListener('scroll', updateScrollHint);
+
 
 window.addEventListener('DOMContentLoaded', () => {
-  console.log("[DocQuery] Running window load session reset...");
+  console.log("[DocQuery] New session detected. Cleaning up previous environment data...");
+
   fetch(API + "/api/reset", { 
     method: 'POST',
     headers: { "X-User-ID": userId }
   })
     .then(res => res.json())
     .then(data => {
-      console.log("[DocQuery] Backend database cleared successfully:", data);
+      console.log("[DocQuery] Previous workspace vectors and files wiped cleanly:", data);
       localStorage.removeItem("fileSizes");
+
       loadFiles();
     })
     .catch(err => {
-      console.error("[DocQuery] Failed to trigger auto-reset endpoint:", err);
+      console.error("[DocQuery] Failed to trigger auto-reset endpoint on startup:", err);
       loadFiles();
     });
 });
@@ -323,7 +344,9 @@ function scheduleRender(element, rawText, container) {
     pendingUpdate = true;
     rafId = requestAnimationFrame(() => {
       element.innerHTML = marked.parse(rawText);
-      smoothScrollToBottom(container);
+      setTimeout(() => {
+        smoothScrollToBottom(container);
+      }, 0);
       pendingUpdate = false;
     });
   }
@@ -348,6 +371,9 @@ async function send() {
 
   if (!q) return;
   log("info", "ASK sent", { question: q });
+
+  userScrolledUp = false;
+  lastScrollTop = 0;
 
   document.getElementById("q").value = "";
   updateCounter();
@@ -474,6 +500,8 @@ async function send() {
 
 async function runSummarize() {
   if (isLoading) return;
+  
+  userScrolledUp = false;
   setLoading(true);
 
   const botDiv = document.createElement("div");

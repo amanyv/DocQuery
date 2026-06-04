@@ -97,8 +97,8 @@ function showError(message, container) {
   smoothScrollToBottom(container, true);
 }
 
-const API = "http://127.0.0.1:5000";
-// const API = "https://docquery-5dai.onrender.com";
+// const API = "http://127.0.0.1:5000";
+const API = "https://docquery-5dai.onrender.com";
 
 const MAX_CHARS = 500;
 let pollInterval = null;
@@ -519,7 +519,7 @@ async function runSummarize() {
   userScrolledUp = false;
   unreadMessageExists = false;
   document.getElementById("scroll-hint").classList.remove('visible');
-  
+
   setLoading(true);
 
   const botDiv = document.createElement("div");

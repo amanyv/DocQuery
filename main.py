@@ -35,7 +35,7 @@ TABLE_NAME = "documents_prod" if IS_RENDER else "documents_local"
 RPC_NAME = "match_documents_prod" if IS_RENDER else "match_documents_local"
 
 def init_rag():
-    """Initializes the models and connects to Supabase pgvector."""
+    """Initializes the models and connects to Supabase pgvector using Gemini API embeddings."""
     global vectorstore, embeddings, supabase_client
 
     SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -48,32 +48,27 @@ def init_rag():
         supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     if embeddings is None:
-        if IS_RENDER:
-            print("🚀 Running on Render: Initializing Google Gemini (3072 dims)...")
-            from langchain_google_genai import GoogleGenerativeAIEmbeddings
-            
-            key_pool = [
-                os.getenv("GEMINI_API_KEY_1"),
-                os.getenv("GEMINI_API_KEY_2")
-            ]
-            
-            valid_keys = [k for k in key_pool if k]
-            
-            if not valid_keys:
-                raise ValueError("🚨 CRITICAL: No Gemini API keys found in environment variables!")
-            
-            selected_key = random.choice(valid_keys)
-            print(f"🔑 Selected a Google API Key from a pool of {len(valid_keys)} keys.")
-            
-            embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/gemini-embedding-001",
-                google_api_key=selected_key
-            )
-            
-        else:
-            print("💻 Running Locally: Initializing HuggingFace (384 dims)...")
-            from langchain_huggingface import HuggingFaceEmbeddings
-            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        env_label = "Render Production" if IS_RENDER else "Local Development"
+        print(f"🚀 [{env_label}]: Initializing Cloud-Based Google Gemini Embeddings (3072 dims)...")
+        
+        key_pool = [
+            os.getenv("GEMINI_API_KEY_1"),
+            os.getenv("GEMINI_API_KEY_2"),
+            os.getenv("GOOGLE_API_KEY")
+        ]
+        
+        valid_keys = [k for k in key_pool if k]
+        
+        if not valid_keys:
+            raise ValueError("🚨 CRITICAL: No Gemini API keys found in environment variables (Check GEMINI_API_KEY_1, GEMINI_API_KEY_2, or GOOGLE_API_KEY)!")
+        
+        selected_key = random.choice(valid_keys)
+        print(f"🔑 Selected a Google API Key from a pool of {len(valid_keys)} configured keys.")
+        
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/gemini-embedding-001",
+            google_api_key=selected_key
+        )
 
     vectorstore = SupabaseVectorStore(
         client=supabase_client,
@@ -81,7 +76,7 @@ def init_rag():
         table_name=TABLE_NAME,
         query_name=RPC_NAME
     )
-    print("Connected to Supabase Vector Store.")
+    print(f"Connected to Supabase Vector Store Table: {TABLE_NAME}")
 
 def add_documents(file_paths, user_id):
     """Processes new files, tags them, and uploads vectors to Supabase."""
@@ -130,12 +125,10 @@ def add_documents(file_paths, user_id):
         print(f"Successfully added {len(chunks)} new chunks to Supabase for user {user_id}.")
 
 def delete_document(filename: str, user_id: str):
-    """Directly deletes a document's chunks from Supabase using SQL filters."""
     global supabase_client
     if supabase_client is None: return
-    
     try:
-        supabase_client.table(TABLE_NAME).delete().eq("metadata->>source_file", filename).eq("metadata->>user_id", user_id).execute()
+        supabase_client.table(TABLE_NAME).delete().filter("metadata->>source_file", "eq", filename).filter("metadata->>user_id", "eq", user_id).execute()
         print(f"Successfully deleted vectors for {filename}")
     except Exception as e:
         print(f"Failed to delete vectors from Supabase: {e}")

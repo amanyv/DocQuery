@@ -20,12 +20,14 @@ function escapeHtml(text) {
 
 let userScrolledUp = false;
 let lastScrollTop = 0;
+let unreadMessageExists = false;
 
 function smoothScrollToBottom(container, force = false) {
   if (!container) return;
 
   if (force) {
     userScrolledUp = false;
+    unreadMessageExists = false;
     container.scrollTo({
       top: container.scrollHeight,
       behavior: 'smooth'
@@ -46,10 +48,13 @@ function scrollToBottom() {
   if (!chat) return;
   
   userScrolledUp = false;
+  unreadMessageExists = false;
   chat.scrollTo({
     top: chat.scrollHeight,
     behavior: 'smooth'
   });
+
+  document.getElementById("scroll-hint").classList.remove('visible');
 }
 
 function updateScrollHint() {
@@ -68,10 +73,18 @@ function updateScrollHint() {
   if (isAtBottom) {
     hint.classList.remove('visible');
     userScrolledUp = false;
+    unreadMessageExists = false;
   } else {
-    hint.classList.add('visible');
+
     if (isLoading && isScrollingUp) {
       userScrolledUp = true;
+      unreadMessageExists = true; 
+    }
+
+    if (unreadMessageExists) {
+      hint.classList.add('visible');
+    } else {
+      hint.classList.remove('visible');
     }
   }
 }
@@ -374,6 +387,8 @@ async function send() {
 
   userScrolledUp = false;
   lastScrollTop = 0;
+  unreadMessageExists = false;
+  document.getElementById("scroll-hint").classList.remove('visible'); 
 
   document.getElementById("q").value = "";
   updateCounter();
@@ -502,6 +517,9 @@ async function runSummarize() {
   if (isLoading) return;
   
   userScrolledUp = false;
+  unreadMessageExists = false;
+  document.getElementById("scroll-hint").classList.remove('visible');
+  
   setLoading(true);
 
   const botDiv = document.createElement("div");

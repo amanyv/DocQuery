@@ -78,6 +78,35 @@ def init_rag():
     )
     print(f"Connected to Supabase Vector Store Table: {TABLE_NAME}")
 
+def rotate_gemini_key():
+    """Selects a new Gemini key from the pool and re-initializes the embedding wrapper."""
+    global embeddings, vectorstore
+    
+    key_pool = [
+        os.getenv("GEMINI_API_KEY_1"),
+        os.getenv("GEMINI_API_KEY_2"),
+        os.getenv("GOOGLE_API_KEY")
+    ]
+    valid_keys = [k for k in key_pool if k]
+    
+    if not valid_keys:
+        raise ValueError("🚨 CRITICAL: No Gemini API keys found during rotation!")
+        
+    selected_key = random.choice(valid_keys)
+    print(f"🔄 Rotating API Key: Selected a new key from your pool of {len(valid_keys)} keys.")
+    
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001",
+        google_api_key=selected_key
+    )
+
+    vectorstore = SupabaseVectorStore(
+        client=supabase_client,
+        embedding=embeddings,
+        table_name=TABLE_NAME,
+        query_name=RPC_NAME
+    )
+
 def add_documents(file_paths, user_id):
     """Processes new files, tags them, and uploads vectors to Supabase."""
     global vectorstore
@@ -117,8 +146,12 @@ def add_documents(file_paths, user_id):
                     error_msg = str(e)
 
                     if "429" in error_msg or "Quota" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                        print("⚠️ Google API Free Tier limit reached! Pausing for 60 seconds before retrying...")
-                        time.sleep(60)
+                        print("⚠️ Google API Free Tier limit reached! Rotating key and pausing for 5 seconds before retrying...")
+                        try:
+                            rotate_gemini_key()
+                        except Exception as rotation_err:
+                            print(f"Failed to rotate key: {rotation_err}")
+                        time.sleep(5)
                     else:
                         raise e
         
